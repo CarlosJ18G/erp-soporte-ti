@@ -1,0 +1,206 @@
+// ─── Prisma Schema ─────────────────────────────────────────────────────────────
+// Fuente de verdad del modelo de datos del ERP de Soporte Técnico.
+// Todas las entidades usan UUID como PK y soft delete (deletedAt).
+// ────────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TECNICO
+}
+
+enum AssetType {
+  COMPUTADORA
+  LAPTOP
+  SERVIDOR
+  IMPRESORA
+  UPS
+  SWITCH
+  ROUTER
+  FIREWALL
+  OTRO
+}
+
+enum AssetStatus {
+  OPERATIVO
+  EN_REPARACION
+  DADO_DE_BAJA
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROGRESO
+  EN_ESPERA
+  RESUELTO
+  CERRADO
+}
+
+enum ServiceOrderStatus {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADA
+  CANCELADA
+}
+
+enum ServiceOrderType {
+  CORRECTIVO
+  PREVENTIVO
+  INSTALACION
+  CONSULTORIA
+}
+
+enum WorkLogActivity {
+  DIAGNOSTICO
+  REPARACION
+  INSTALACION
+  CONFIGURACION
+  MANTENIMIENTO
+  CONSULTA
+  OTRO
+}
+
+// ─── Modelos ─────────────────────────────────────────────────────────────────
+
+model Client {
+  id        String    @id @default(uuid())
+  nombre    String
+  apellido  String
+  email     String    @unique
+  telefono  String?
+  empresa   String?
+  direccion String?
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  assets  Asset[]
+  tickets Ticket[]
+
+  @@map("clients")
+}
+
+model Technician {
+  id           String    @id @default(uuid())
+  nombre       String
+  apellido     String
+  email        String    @unique
+  password     String
+  telefono     String?
+  especialidad String?
+  rol          Role      @default(TECNICO)
+  activo       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  ticketsAsignados ServiceOrder[]
+  workLogs         WorkLog[]
+  tickets          Ticket[]       @relation("TechnicianTickets")
+
+  @@map("technicians")
+}
+
+model Asset {
+  id               String      @id @default(uuid())
+  nombre           String
+  tipo             AssetType   @default(OTRO)
+  marca            String?
+  modelo           String?
+  numeroSerie      String?     @unique @map("numero_serie")
+  descripcion      String?
+  fechaAdquisicion DateTime?   @map("fecha_adquisicion")
+  estado           AssetStatus @default(OPERATIVO)
+  clienteId        String      @map("cliente_id")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  deletedAt        DateTime?   @map("deleted_at")
+
+  cliente Client   @relation(fields: [clienteId], references: [id])
+  tickets Ticket[]
+
+  @@map("assets")
+}
+
+model Ticket {
+  id                String         @id @default(uuid())
+  titulo            String
+  descripcion       String
+  prioridad         TicketPriority @default(MEDIA)
+  estado            TicketStatus   @default(ABIERTO)
+  categoria         String?
+  fechaVencimiento  DateTime?      @map("fecha_vencimiento")
+  clienteId         String         @map("cliente_id")
+  activoId          String?        @map("activo_id")
+  tecnicoAsignadoId String?        @map("tecnico_asignado_id")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  deletedAt         DateTime?      @map("deleted_at")
+
+  cliente         Client      @relation(fields: [clienteId], references: [id])
+  activo          Asset?      @relation(fields: [activoId], references: [id])
+  tecnicoAsignado Technician? @relation("TechnicianTickets", fields: [tecnicoAsignadoId], references: [id])
+  serviceOrder    ServiceOrder?
+
+  @@map("tickets")
+}
+
+model ServiceOrder {
+  id            String             @id @default(uuid())
+  numero        String             @unique
+  descripcion   String?
+  estado        ServiceOrderStatus @default(PENDIENTE)
+  tipo          ServiceOrderType   @default(CORRECTIVO)
+  fechaInicio   DateTime?          @map("fecha_inicio")
+  fechaFin      DateTime?          @map("fecha_fin")
+  costoEstimado Decimal?           @map("costo_estimado") @db.Decimal(10, 2)
+  costoFinal    Decimal?           @map("costo_final") @db.Decimal(10, 2)
+  notas         String?
+  ticketId      String             @unique @map("ticket_id")
+  tecnicoId     String             @map("tecnico_id")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  deletedAt     DateTime?          @map("deleted_at")
+
+  ticket   Ticket     @relation(fields: [ticketId], references: [id])
+  tecnico  Technician @relation(fields: [tecnicoId], references: [id])
+  workLogs WorkLog[]
+
+  @@map("service_orders")
+}
+
+model WorkLog {
+  id              String          @id @default(uuid())
+  descripcion     String
+  horasTrabajadas Decimal         @map("horas_trabajadas") @db.Decimal(5, 2)
+  fecha           DateTime        @db.Date
+  tipoActividad   WorkLogActivity @default(OTRO) @map("tipo_actividad")
+  interno         Boolean         @default(false)
+  ordenServicioId String          @map("orden_servicio_id")
+  tecnicoId       String          @map("tecnico_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+
+  ordenServicio ServiceOrder @relation(fields: [ordenServicioId], references: [id])
+  tecnico       Technician   @relation(fields: [tecnicoId], references: [id])
+
+  @@map("work_logs")
+}
