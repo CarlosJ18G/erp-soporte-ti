@@ -1,0 +1,21 @@
+// Para activar el proyecto
+
+# 1. Instalar dependencias
+npm install
+
+# 2. Copiar y configurar variables de entorno
+cp .env.example .env
+
+# Editar .env con tu DATABASE_URL de PostgreSQL
+
+# 3. Crear la base de datos y generar el cliente Prisma
+npm run db:migrate   # crea las tablas en PostgreSQL
+npm run db:generate  # genera el cliente tipado
+
+// Iniciar Backend
+taskkill /IM node.exe /F
+npm run dev
+
+//Iniciar Frontend
+cd frontend
+npm run dev
