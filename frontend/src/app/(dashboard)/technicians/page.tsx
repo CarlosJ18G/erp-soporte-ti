@@ -12,6 +12,20 @@ import { formatDate, fmt } from '@/lib/utils';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
+const ESPECIALIDADES = [
+  'SOPORTE_HARDWARE',
+  'SOPORTE_SOFTWARE',
+  'REDES_Y_CONECTIVIDAD',
+  'SERVIDORES',
+  'BASES_DE_DATOS',
+  'SEGURIDAD_INFORMATICA',
+  'SISTEMAS_OPERATIVOS',
+  'CORREO_Y_COLABORACION',
+  'MESA_DE_AYUDA',
+  'TELEFONIA_IP',
+  'OTRA',
+] as const;
+
 interface TechForm {
   nombre: string; apellido: string; email: string; telefono: string;
   especialidad: string; password?: string; rol: 'ADMIN' | 'TECNICO';
@@ -26,6 +40,7 @@ export default function TechniciansPage() {
   const [open,    setOpen]    = useState(false);
   const [editing, setEditing] = useState<Technician | null>(null);
   const [form,    setForm]    = useState<TechForm>(empty);
+  const [customEspecialidad, setCustomEspecialidad] = useState('');
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
 
@@ -36,18 +51,38 @@ export default function TechniciansPage() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(empty); setError(''); setOpen(true); };
+  const openCreate = () => { setEditing(null); setForm(empty); setCustomEspecialidad(''); setError(''); setOpen(true); };
   const openEdit   = (t: Technician) => {
+    const especialidad = t.especialidad ?? '';
+    const conocida = ESPECIALIDADES.includes(especialidad as (typeof ESPECIALIDADES)[number]);
+
     setEditing(t);
-    setForm({ nombre: t.nombre, apellido: t.apellido, email: t.email, telefono: t.telefono ?? '', especialidad: t.especialidad ?? '', rol: t.rol, password: '' });
+    setForm({
+      nombre: t.nombre,
+      apellido: t.apellido,
+      email: t.email,
+      telefono: t.telefono ?? '',
+      especialidad: conocida ? especialidad : especialidad ? 'OTRA' : '',
+      rol: t.rol,
+      password: '',
+    });
+    setCustomEspecialidad(conocida ? '' : especialidad);
     setError(''); setOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setError('');
-    const body = { ...form };
+    const body = {
+      ...form,
+      especialidad: form.especialidad === 'OTRA' ? customEspecialidad.trim() : form.especialidad,
+    };
     if (!body.password) delete body.password;
+    if (form.especialidad === 'OTRA' && !body.especialidad) {
+      setError('Escribe la especialidad personalizada.');
+      setSaving(false);
+      return;
+    }
     try {
       if (editing) await api.put(`/technicians/${editing.id}`, body);
       else         await api.post('/technicians', body);
@@ -125,7 +160,34 @@ export default function TechniciansPage() {
           </div>
           <Input label="Email *" type="email" value={form.email} onChange={f('email')} required />
           <Input label="Telefono" value={form.telefono} onChange={f('telefono')} />
-          <Input label="Especialidad" value={form.especialidad} onChange={f('especialidad')} />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Especialidad</label>
+            <select
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+              value={form.especialidad}
+              onChange={(e) => {
+                f('especialidad')(e);
+                if (e.target.value !== 'OTRA') setCustomEspecialidad('');
+              }}
+            >
+              <option value="">Seleccionar...</option>
+              {ESPECIALIDADES.map((s) => (
+                <option key={s} value={s}>{fmt(s)}</option>
+              ))}
+              {editing && editing.especialidad && !ESPECIALIDADES.includes(editing.especialidad as (typeof ESPECIALIDADES)[number]) && (
+                <option value={editing.especialidad}>{editing.especialidad}</option>
+              )}
+            </select>
+          </div>
+          {form.especialidad === 'OTRA' && (
+            <Input
+              label="Especialidad personalizada"
+              value={customEspecialidad}
+              onChange={(e) => setCustomEspecialidad(e.target.value)}
+              placeholder="Ej. Virtualización"
+              required
+            />
+          )}
           <Input label={editing ? 'Nueva contrasena (dejar vacio para no cambiar)' : 'Contrasena *'} type="password" value={form.password ?? ''} onChange={f('password')} required={!editing} />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Rol</label>
