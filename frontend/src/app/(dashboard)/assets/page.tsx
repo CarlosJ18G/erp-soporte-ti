@@ -12,7 +12,7 @@ import { formatDate, fmt } from '@/lib/utils';
 import { Plus, Pencil } from 'lucide-react';
 
 const TIPOS   = ['COMPUTADORA','LAPTOP','SERVIDOR','IMPRESORA','UPS','SWITCH','ROUTER','FIREWALL','OTRO'];
-const ESTADOS = ['OPERATIVO', 'EN REPARACION', 'DADO DE BAJA'];
+const ESTADOS = ['OPERATIVO', 'EN_REPARACION', 'DADO_DE_BAJA'];
 
 interface AssetForm { clienteId: string; nombre: string; tipo: string; marca: string; modelo: string; numeroSerie: string; estado: string; descripcion: string; }
 const empty: AssetForm = { clienteId: '', nombre: '', tipo: 'COMPUTADORA', marca: '', modelo: '', numeroSerie: '', estado: 'OPERATIVO', descripcion: '' };

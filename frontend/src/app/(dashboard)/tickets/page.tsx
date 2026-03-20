@@ -12,7 +12,7 @@ import { formatDate, fmt } from '@/lib/utils';
 import { Plus, ChevronDown } from 'lucide-react';
 
 const PRIORIDADES = ['BAJA','MEDIA','ALTA','CRITICA'];
-const ESTADOS     = ['ABIERTO','EN PROGRESO','EN ESPERA','RESUELTO','CERRADO'];
+const ESTADOS     = ['ABIERTO','EN_PROGRESO','EN_ESPERA','RESUELTO','CERRADO'];
 
 interface TicketForm { clienteId: string; activoId: string; tecnicoAsignadoId: string; titulo: string; descripcion: string; prioridad: string; }
 const empty: TicketForm = { clienteId: '', activoId: '', tecnicoAsignadoId: '', titulo: '', descripcion: '', prioridad: 'MEDIA' };
