@@ -15,6 +15,7 @@ import {
   LogOut,
   Terminal,
   X,
+  Package,
 } from 'lucide-react';
 
 const nav = [
@@ -24,6 +25,7 @@ const nav = [
   { href: '/assets',           label: 'Activos',          icon: Monitor },
   { href: '/tickets',          label: 'Tickets',          icon: Ticket },
   { href: '/service-orders',   label: 'Órdenes de servicio', icon: ClipboardList },
+  { href: '/spare-parts',      label: 'Repuestos',        icon: Package, adminOnly: true },
   { href: '/work-logs',        label: 'Registros de horas',  icon: Clock },
 ];
 

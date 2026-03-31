@@ -80,7 +80,6 @@ export interface ServiceOrder {
   tipo: ServiceOrderType;
   fechaInicio?: string;
   fechaFin?: string;
-  costoEstimado?: number;
   costoFinal?: number;
   notas?: string;
   ticketId: string;
@@ -90,6 +89,32 @@ export interface ServiceOrder {
   };
   tecnico?: Pick<Technician, 'id' | 'nombre' | 'apellido' | 'especialidad' | 'email'>;
   workLogs?: WorkLog[];
+  repuestosUsados?: ServiceOrderSparePart[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SparePart {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  precio: number;
+  stock: number;
+  stockMinimo: number;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceOrderSparePart {
+  id: string;
+  ordenServicioId: string;
+  repuestoId: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+  repuesto?: Pick<SparePart, 'id' | 'codigo' | 'nombre' | 'precio' | 'stock' | 'stockMinimo'>;
   createdAt: string;
   updatedAt: string;
 }

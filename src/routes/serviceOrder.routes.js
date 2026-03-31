@@ -38,8 +38,6 @@ const bodyRules = {
                                      .isISO8601().withMessage('fechaInicio debe ser formato ISO 8601.'),
   fechaFin:      body('fechaFin').optional({ nullable: true })
                                   .isISO8601().withMessage('fechaFin debe ser formato ISO 8601.'),
-  costoEstimado: body('costoEstimado').optional({ nullable: true })
-                                       .isFloat({ min: 0 }).withMessage('costoEstimado debe ser un número positivo.'),
   costoFinal:    body('costoFinal').optional({ nullable: true })
                                     .isFloat({ min: 0 }).withMessage('costoFinal debe ser un número positivo.'),
   notas:         body('notas').optional({ nullable: true }).trim(),
@@ -72,8 +70,6 @@ router.post(
   [
     bodyRules.descripcion,
     bodyRules.tipo,
-    bodyRules.fechaInicio,
-    bodyRules.costoEstimado,
     bodyRules.notas,
     bodyRules.ticketId,
     bodyRules.tecnicoId,
@@ -91,7 +87,6 @@ router.put(
     bodyRules.tipo,
     bodyRules.fechaInicio,
     bodyRules.fechaFin,
-    bodyRules.costoEstimado,
     bodyRules.costoFinal,
     bodyRules.notas,
     body('tecnicoId').optional().isUUID().withMessage('tecnicoId debe ser un UUID válido.'),
@@ -107,6 +102,9 @@ router.patch(
     uuidParam,
     body('estado').notEmpty().withMessage('El estado es requerido.')
                   .isIn(ESTADOS).withMessage(`Estado inválido. Valores: ${ESTADOS.join(', ')}.`),
+    body('repuestos').optional().isArray().withMessage('repuestos debe ser un arreglo.'),
+    body('repuestos.*.repuestoId').optional().isUUID().withMessage('repuestos.repuestoId debe ser un UUID válido.'),
+    body('repuestos.*.cantidad').optional().isInt({ min: 1 }).withMessage('repuestos.cantidad debe ser un entero mayor a 0.'),
     validate,
   ],
   updateStatus,

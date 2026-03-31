@@ -50,6 +50,15 @@ const WorkLogModel = {
     }),
 
   /**
+   * Busca si ya existe un registro activo para una orden de servicio.
+   */
+  findByOrdenServicioId: (ordenServicioId) =>
+    prisma.workLog.findFirst({
+      where: { ordenServicioId, deletedAt: null },
+      select: { id: true, ordenServicioId: true },
+    }),
+
+  /**
    * Suma total de horas trabajadas en una orden de servicio.
    * Útil para mostrar en el detalle de la orden.
    */

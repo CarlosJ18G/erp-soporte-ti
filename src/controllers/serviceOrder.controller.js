@@ -19,11 +19,21 @@ const { matchedData }     = require('express-validator');
 
 const ESTADOS_TERMINALES = ['COMPLETADA', 'CANCELADA'];
 
+const esAdmin = (user) => user?.rol === 'ADMIN';
+const puedeAccederOrden = (user, orden) => esAdmin(user) || orden?.tecnico?.id === user?.id;
+
 // GET /api/service-orders
 const getAll = async (req, res, next) => {
   try {
     const { estado, tipo, tecnicoId } = req.query;
-    const orders = await ServiceOrderModel.findAll({ estado, tipo, tecnicoId });
+    const filters = { estado, tipo, tecnicoId };
+
+    // Alcance por rol: ADMIN ve todo, TECNICO solo sus órdenes asignadas.
+    if (!esAdmin(req.user)) {
+      filters.tecnicoId = req.user.id;
+    }
+
+    const orders = await ServiceOrderModel.findAll(filters);
     res.status(200).json({ success: true, data: orders });
   } catch (error) {
     next(error);
@@ -37,6 +47,11 @@ const getById = async (req, res, next) => {
     if (!order) {
       return next(createHttpError(404, 'Orden de servicio no encontrada.'));
     }
+
+    if (!puedeAccederOrden(req.user, order)) {
+      return next(createHttpError(403, 'No tienes permisos para ver esta orden de servicio.'));
+    }
+
     res.status(200).json({ success: true, data: order });
   } catch (error) {
     next(error);
@@ -71,6 +86,9 @@ const create = async (req, res, next) => {
       return next(createHttpError(404, 'El técnico especificado no existe.'));
     }
 
+    // Auto-setear fechaInicio con la hora actual
+    body.fechaInicio = new Date();
+
     const order = await ServiceOrderModel.create(body);
 
     // Avanzar el ticket a EN_PROGRESO al crear la orden
@@ -91,6 +109,10 @@ const update = async (req, res, next) => {
     const existing = await ServiceOrderModel.findById(id);
     if (!existing) {
       return next(createHttpError(404, 'Orden de servicio no encontrada.'));
+    }
+
+    if (!puedeAccederOrden(req.user, existing)) {
+      return next(createHttpError(403, 'No tienes permisos para modificar esta orden de servicio.'));
     }
 
     // No se puede editar una orden en estado terminal
@@ -118,10 +140,15 @@ const updateStatus = async (req, res, next) => {
   try {
     const { id }   = req.params;
     const { estado } = matchedData(req);
+    const repuestos = Array.isArray(req.body.repuestos) ? req.body.repuestos : [];
 
     const existing = await ServiceOrderModel.findById(id);
     if (!existing) {
       return next(createHttpError(404, 'Orden de servicio no encontrada.'));
+    }
+
+    if (!puedeAccederOrden(req.user, existing)) {
+      return next(createHttpError(403, 'No tienes permisos para cambiar el estado de esta orden.'));
     }
 
     // No se puede cambiar el estado de una orden terminal
@@ -131,7 +158,7 @@ const updateStatus = async (req, res, next) => {
 
     // Al completar: usar transacción que también resuelve el ticket
     if (estado === 'COMPLETADA') {
-      const [orderActualizada] = await ServiceOrderModel.completar(id, existing.ticket.id);
+      const orderActualizada = await ServiceOrderModel.completarConRepuestos(id, existing.ticket.id, repuestos);
       return res.status(200).json({ success: true, data: orderActualizada });
     }
 
@@ -150,6 +177,10 @@ const remove = async (req, res, next) => {
     const existing = await ServiceOrderModel.findById(id);
     if (!existing) {
       return next(createHttpError(404, 'Orden de servicio no encontrada.'));
+    }
+
+    if (!puedeAccederOrden(req.user, existing)) {
+      return next(createHttpError(403, 'No tienes permisos para eliminar esta orden de servicio.'));
     }
 
     if (existing.estado === 'COMPLETADA') {

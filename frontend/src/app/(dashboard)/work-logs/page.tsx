@@ -44,7 +44,8 @@ export default function WorkLogsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setError('');
-    const body = { ...form, horasTrabajadas: parseFloat(form.horasTrabajadas) };
+    const fechaIso = form.fecha.includes('T') ? form.fecha.slice(0, 10) : form.fecha;
+    const body = { ...form, fecha: fechaIso, horasTrabajadas: parseFloat(form.horasTrabajadas) };
     try {
       if (editing) await api.put(`/work-logs/${editing.id}`, body);
       else         await api.post('/work-logs', body);
@@ -62,8 +63,15 @@ export default function WorkLogsPage() {
   const f = (k: keyof LogForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
 
-  const orderNum = (id: string) => orders.find(o => o.id === id)?.numero ?? id;
-  const canEdit  = (l: WorkLog) => isAdmin || l.tecnicoId === user?.id;
+  const orderNum = (log: WorkLog) => log.ordenServicio?.numero ?? orders.find(o => o.id === log.ordenServicioId)?.numero ?? log.ordenServicioId;
+  const canEdit  = () => isAdmin;
+  const canDelete = (l: WorkLog) => isAdmin || l.tecnicoId === user?.id;
+  const usedOrderIds = new Set(logs.map((l) => l.ordenServicioId));
+  const availableOrders = orders.filter((o) => {
+    const ticketPermitido = ['RESUELTO', 'CERRADO'].includes(o.ticket?.estado ?? '');
+    const ordenDisponible = editing ? o.id === form.ordenServicioId || !usedOrderIds.has(o.id) : !usedOrderIds.has(o.id);
+    return ticketPermitido && ordenDisponible;
+  });
 
   if (loading) return <LoadingSpinner />;
 
@@ -92,16 +100,20 @@ export default function WorkLogsPage() {
             <tbody>
               {logs.map(l => (
                 <tr key={l.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-5 py-3 font-mono text-xs text-gray-700">{orderNum(l.ordenServicioId)}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-gray-700">{orderNum(l)}</td>
                   <td className="px-5 py-3 text-gray-600">{fmt(l.tipoActividad)}</td>
                   <td className="px-5 py-3 font-medium text-gray-900">{l.horasTrabajadas}h</td>
                   <td className="px-5 py-3 text-gray-400">{formatDate(l.fecha)}</td>
                   <td className="px-5 py-3 text-gray-500 max-w-xs truncate">{l.descripcion ?? '-'}</td>
                   <td className="px-5 py-3">
-                    {canEdit(l) && (
+                    {(canEdit() || canDelete(l)) && (
                       <div className="flex items-center gap-2 justify-end">
-                        <button onClick={() => openEdit(l)} className="rounded p-1 hover:bg-gray-100 text-gray-400 hover:text-primary"><Pencil className="h-4 w-4" /></button>
+                        {canEdit() && (
+                          <button onClick={() => openEdit(l)} className="rounded p-1 hover:bg-gray-100 text-gray-400 hover:text-primary"><Pencil className="h-4 w-4" /></button>
+                        )}
+                        {canDelete(l) && (
                         <button onClick={() => handleDelete(l.id)} className="rounded p-1 hover:bg-gray-100 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -116,12 +128,15 @@ export default function WorkLogsPage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Orden de servicio *</label>
-            <select className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" value={form.ordenServicioId} onChange={f('ordenServicioId')} required>
+            <select className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary disabled:bg-gray-100" value={form.ordenServicioId} onChange={f('ordenServicioId')} required disabled={!!editing}>
               <option value="">Seleccionar...</option>
-              {orders.filter(o => ['PENDIENTE','EN_PROGRESO'].includes(o.estado)).map(o => (
+              {availableOrders.map(o => (
                 <option key={o.id} value={o.id}>{o.numero}</option>
               ))}
             </select>
+            {!editing && availableOrders.length === 0 && (
+              <p className="text-xs text-amber-700">No hay órdenes disponibles: cada orden solo admite un registro de horas.</p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Actividad *</label>

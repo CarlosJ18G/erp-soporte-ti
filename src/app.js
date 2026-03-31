@@ -34,6 +34,7 @@ app.use('/api/assets',      require('./routes/asset.routes'));
 app.use('/api/tickets',        require('./routes/ticket.routes'));
 app.use('/api/service-orders', require('./routes/serviceOrder.routes'));
 app.use('/api/work-logs',      require('./routes/workLog.routes'));
+app.use('/api/spare-parts',    require('./routes/sparePart.routes'));
 
 // ─── Manejo de errores (debe ir al final) ─────────────────────────────────────
 app.use(notFound);

@@ -131,7 +131,7 @@ export default function TechniciansPage() {
                 <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-5 py-3 font-medium text-gray-900">{t.nombre} {t.apellido}</td>
                   <td className="px-5 py-3 text-gray-500">{t.email}</td>
-                  <td className="px-5 py-3 text-gray-500">{t.especialidad ?? '-'}</td>
+                  <td className="px-5 py-3 text-gray-500">{t.especialidad ? fmt(t.especialidad) : '-'}</td>
                   <td className="px-5 py-3"><Badge variant={t.rol === 'ADMIN' ? 'info' : 'default'}>{fmt(t.rol)}</Badge></td>
                   <td className="px-5 py-3"><Badge variant={t.activo ? 'success' : 'danger'}>{t.activo ? 'Activo' : 'Inactivo'}</Badge></td>
                   <td className="px-5 py-3 text-gray-400">{formatDate(t.createdAt)}</td>

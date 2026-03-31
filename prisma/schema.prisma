@@ -170,7 +170,6 @@ model ServiceOrder {
   tipo          ServiceOrderType   @default(CORRECTIVO)
   fechaInicio   DateTime?          @map("fecha_inicio")
   fechaFin      DateTime?          @map("fecha_fin")
-  costoEstimado Decimal?           @map("costo_estimado") @db.Decimal(10, 2)
   costoFinal    Decimal?           @map("costo_final") @db.Decimal(10, 2)
   notas         String?
   ticketId      String             @unique @map("ticket_id")
@@ -182,8 +181,45 @@ model ServiceOrder {
   ticket   Ticket     @relation(fields: [ticketId], references: [id])
   tecnico  Technician @relation(fields: [tecnicoId], references: [id])
   workLogs WorkLog[]
+  repuestosUsados ServiceOrderSparePart[]
 
   @@map("service_orders")
+}
+
+model SparePart {
+  id          String    @id @default(uuid())
+  codigo      String    @unique
+  nombre      String
+  descripcion String?
+  precio      Decimal   @db.Decimal(10, 2)
+  stock       Int       @default(0)
+  stockMinimo Int       @default(5) @map("stock_minimo")
+  activo      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  ordenes ServiceOrderSparePart[]
+
+  @@map("repuestos")
+}
+
+model ServiceOrderSparePart {
+  id             String       @id @default(uuid())
+  ordenServicioId String      @map("orden_servicio_id")
+  repuestoId     String       @map("repuesto_id")
+  cantidad       Int
+  precioUnitario Decimal      @map("precio_unitario") @db.Decimal(10, 2)
+  subtotal       Decimal      @db.Decimal(10, 2)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  deletedAt      DateTime?    @map("deleted_at")
+
+  ordenServicio ServiceOrder  @relation(fields: [ordenServicioId], references: [id])
+  repuesto     SparePart      @relation(fields: [repuestoId], references: [id])
+
+  @@unique([ordenServicioId, repuestoId])
+  @@map("orden_servicio_repuestos")
 }
 
 model WorkLog {

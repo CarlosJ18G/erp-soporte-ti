@@ -92,8 +92,10 @@ export const Header = ({ onOpenMobileMenu }: HeaderProps) => {
         </div>
 
         <h1 className="truncate text-sm font-semibold text-slate-900 md:hidden">{getTitle(pathname)}</h1>
+      </div>
 
-        <form onSubmit={onSearchSubmit} className="relative ml-1 hidden w-full max-w-sm lg:block">
+      <div className="relative hidden flex-1 justify-center lg:flex">
+        <form onSubmit={onSearchSubmit} className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             ref={inputRef}

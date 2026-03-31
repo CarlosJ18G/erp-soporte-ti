@@ -9,10 +9,10 @@ interface ModalProps {
   onClose:   () => void;
   title:     string;
   children:  React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
-const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl' };
+const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl' };
 
 export const Modal = ({ open, onClose, title, children, maxWidth = 'md' }: ModalProps) => {
   // Cerrar con Escape

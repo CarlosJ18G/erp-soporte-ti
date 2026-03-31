@@ -60,6 +60,7 @@ router.get(
     query('prioridad').optional().isIn(PRIORIDADES).withMessage('prioridad inválida.'),
     query('clienteId').optional().isUUID().withMessage('clienteId debe ser un UUID válido.'),
     query('tecnicoAsignadoId').optional().isUUID().withMessage('tecnicoAsignadoId debe ser un UUID válido.'),
+    query('mostrarCerrados').optional().isBoolean().withMessage('mostrarCerrados debe ser booleano.'),
     validate,
   ],
   getAll,

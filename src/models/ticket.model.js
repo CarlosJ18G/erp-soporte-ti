@@ -24,11 +24,12 @@ const includeRelaciones = {
 const TicketModel = {
   /**
    * Lista tickets no eliminados con filtros opcionales.
-   * @param {object} filters - { estado, prioridad, clienteId, tecnicoAsignadoId }
+   * @param {object} filters - { estado, estadoNot, prioridad, clienteId, tecnicoAsignadoId }
    */
   findAll: (filters = {}) => {
     const where = { deletedAt: null };
     if (filters.estado)            where.estado            = filters.estado;
+    if (filters.estadoNot)         where.estado            = { not: filters.estadoNot };
     if (filters.prioridad)         where.prioridad         = filters.prioridad;
     if (filters.clienteId)         where.clienteId         = filters.clienteId;
     if (filters.tecnicoAsignadoId) where.tecnicoAsignadoId = filters.tecnicoAsignadoId;
