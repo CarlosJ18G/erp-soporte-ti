@@ -109,6 +109,11 @@ const update = async (req, res, next) => {
       }
     }
 
+    // Un administrador no puede quitarse su propio rol ADMIN.
+    if (req.user?.id === id && req.user?.rol === 'ADMIN' && body.rol && body.rol !== 'ADMIN') {
+      return next(createHttpError(400, 'No puedes quitarte el rol de administrador a ti mismo.'));
+    }
+
     // Si se envía un nuevo password, hashearlo
     if (body.password) {
       body.password = await bcrypt.hash(body.password, SALT_ROUNDS);

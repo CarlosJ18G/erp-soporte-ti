@@ -9,10 +9,12 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge, assetStatusVariant } from '@/components/ui/Badge';
 import { LoadingSpinner, EmptyState } from '@/components/ui/States';
 import { formatDate, fmt } from '@/lib/utils';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { ApiError } from '@/lib/api';
 
 const TIPOS   = ['COMPUTADORA','LAPTOP','SERVIDOR','IMPRESORA','UPS','SWITCH','ROUTER','FIREWALL','OTRO'];
 const ESTADOS = ['OPERATIVO', 'EN_REPARACION', 'DADO_DE_BAJA'];
+const ESTADOS_REGISTRO = ['OPERATIVO', 'EN_REPARACION'];
 const MARCAS_POR_TIPO: Record<string, string[]> = {
   COMPUTADORA: ['DELL', 'HP', 'LENOVO', 'ASUS', 'ACER', 'APPLE', 'MSI'],
   LAPTOP: ['DELL', 'HP', 'LENOVO', 'ASUS', 'ACER', 'APPLE', 'MSI', 'SAMSUNG'],
@@ -97,30 +99,51 @@ const MODELOS_POR_TIPO_Y_MARCA: Record<string, Record<string, string[]>> = {
   },
 };
 
-interface AssetForm { clienteId: string; nombre: string; tipo: string; marca: string; modelo: string; numeroSerie: string; estado: string; descripcion: string; }
-const empty: AssetForm = { clienteId: '', nombre: '', tipo: 'COMPUTADORA', marca: '', modelo: '', numeroSerie: '', estado: 'OPERATIVO', descripcion: '' };
+interface AssetForm { empresa: string; cantidad: string; nombre: string; tipo: string; marca: string; modelo: string; numeroSerie: string; estado: string; descripcion: string; }
+const generateRandomSerial = () => {
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const timestamp = Date.now().toString(36).slice(-4).toUpperCase();
+  return `SR-${timestamp}-${rand}`;
+};
+
+const makeEmptyAssetForm = (): AssetForm => ({
+  empresa: '',
+  cantidad: '1',
+  nombre: '',
+  tipo: 'COMPUTADORA',
+  marca: '',
+  modelo: '',
+  numeroSerie: generateRandomSerial(),
+  estado: 'OPERATIVO',
+  descripcion: '',
+});
 
 export default function AssetsPage() {
   const [assets,   setAssets]   = useState<Asset[]>([]);
   const [clients,  setClients]  = useState<Client[]>([]);
   const [loading,  setLoading]  = useState(true);
+  const [empresaFilter, setEmpresaFilter] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState('');
   const [open,     setOpen]     = useState(false);
   const [editing,  setEditing]  = useState<Asset | null>(null);
-  const [form,     setForm]     = useState<AssetForm>(empty);
+  const [form,     setForm]     = useState<AssetForm>(makeEmptyAssetForm());
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
 
   const load = () => Promise.all([
-    api.get<Asset[]>('/assets').then(r => setAssets(r.data ?? [])),
+    api.get<Asset[]>('/assets', {
+      empresa: empresaFilter || undefined,
+      estado: estadoFilter || undefined,
+    }).then(r => setAssets(r.data ?? [])),
     api.get<Client[]>('/clients').then(r => setClients(r.data ?? [])),
   ]).finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [empresaFilter, estadoFilter]);
 
-  const openCreate = () => { setEditing(null); setForm(empty); setError(''); setOpen(true); };
+  const openCreate = () => { setEditing(null); setForm(makeEmptyAssetForm()); setError(''); setOpen(true); };
   const openEdit   = (a: Asset) => {
     setEditing(a);
-    setForm({ clienteId: a.clienteId, nombre: a.nombre, tipo: a.tipo, marca: a.marca ?? '', modelo: a.modelo ?? '', numeroSerie: a.numeroSerie ?? '', estado: a.estado, descripcion: a.descripcion ?? '' });
+    setForm({ empresa: a.empresa, cantidad: String(a.cantidad), nombre: a.nombre, tipo: a.tipo, marca: a.marca ?? '', modelo: a.modelo ?? '', numeroSerie: a.numeroSerie ?? '', estado: a.estado, descripcion: a.descripcion ?? '' });
     setError(''); setOpen(true);
   };
 
@@ -128,12 +151,32 @@ export default function AssetsPage() {
     e.preventDefault();
     setSaving(true); setError('');
     try {
-      if (editing) await api.put(`/assets/${editing.id}`, form);
-      else         await api.post('/assets', form);
+      const payload = { ...form, cantidad: Number(form.cantidad) };
+      if (editing) await api.put(`/assets/${editing.id}`, payload);
+      else         await api.post('/assets', payload);
       await load(); setOpen(false);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al guardar');
+      if (err instanceof ApiError) {
+        if (err.errors?.length) {
+          setError(err.errors.map((e) => `${e.field}: ${e.message}`).join(' | '));
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Error al guardar');
+      }
     } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (asset: Asset) => {
+    if (!confirm(`Eliminar activo '${asset.nombre}'?`)) return;
+
+    try {
+      await api.delete(`/assets/${asset.id}`);
+      await load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Error al eliminar');
+    }
   };
 
   const f = (k: keyof AssetForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -147,22 +190,78 @@ export default function AssetsPage() {
   const marcasDisponibles = MARCAS_POR_TIPO[form.tipo] ?? [];
   const marcaKey = form.marca.trim().toUpperCase().replace(/\s+/g, '_');
   const modelosDisponibles = MODELOS_POR_TIPO_Y_MARCA[form.tipo]?.[marcaKey] ?? [];
-
-  const clientName = (id: string) => {
-    const c = clients.find(c => c.id === id);
-    return c ? `${c.nombre} ${c.apellido}` : id;
-  };
+  const empresasDisponibles = Array.from(
+    new Set(
+      clients
+        .map((c) => c.empresa?.trim())
+        .filter((empresa): empresa is string => Boolean(empresa))
+    )
+  ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  const assetsVisibles = assets.filter((asset) => asset.estado !== 'DADO_DE_BAJA');
+  const totalEquipos = assetsVisibles.reduce(
+    (acc, asset) => acc + (asset.estado === 'OPERATIVO' ? asset.cantidad || 0 : 0),
+    0,
+  );
+  const activosOperativos = assetsVisibles.reduce(
+    (acc, asset) => acc + (asset.estado === 'OPERATIVO' ? asset.cantidad || 0 : 0),
+    0,
+  );
+  const empresaConActivos = assetsVisibles.length > 0;
 
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{assets.length} activo(s)</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500">{assetsVisibles.length} activo(s)</p>
+          <select
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            value={empresaFilter}
+            onChange={(e) => setEmpresaFilter(e.target.value)}
+            aria-label="Filtrar activos por empresa"
+          >
+            <option value="">Todas las empresas</option>
+            {empresasDisponibles.map((empresa) => (
+              <option key={empresa} value={empresa}>{empresa}</option>
+            ))}
+          </select>
+          <select
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            value={estadoFilter}
+            onChange={(e) => setEstadoFilter(e.target.value)}
+            aria-label="Filtrar activos por estado"
+          >
+            <option value="">Todos los estados</option>
+            {ESTADOS_REGISTRO.map((estado) => (
+              <option key={estado} value={estado}>{fmt(estado)}</option>
+            ))}
+          </select>
+        </div>
         <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Nuevo activo</Button>
       </div>
 
-      {assets.length === 0 ? (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500">Registros de activos</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{assetsVisibles.length}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500">Cantidad total de equipos</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{totalEquipos}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500">
+            {empresaFilter ? `Estado de ${empresaFilter}` : 'Estado general'}
+          </p>
+          <p className={`mt-1 text-sm font-semibold ${empresaConActivos ? 'text-emerald-700' : 'text-red-600'}`}>
+            {empresaConActivos ? 'Tiene activos registrados' : 'No tiene activos registrados'}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">Operativos: {activosOperativos}</p>
+        </div>
+      </div>
+
+      {assetsVisibles.length === 0 ? (
         <EmptyState title="Sin activos" action={<Button size="sm" onClick={openCreate}>Agregar</Button>} />
       ) : (
         <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-x-auto">
@@ -174,23 +273,32 @@ export default function AssetsPage() {
                 <th className="px-5 py-3">Tipo</th>
                 <th className="px-5 py-3">Marca / Modelo</th>
                 <th className="px-5 py-3">Estado</th>
-                <th className="px-5 py-3">Cliente</th>
+                <th className="px-5 py-3">Empresa</th>
+                <th className="px-5 py-3">Cantidad</th>
                 <th className="px-5 py-3">Creado</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody>
-              {assets.map(a => (
+              {assetsVisibles.map(a => (
                 <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-5 py-3 font-medium text-gray-900">{a.nombre}</td>
                   <td className="px-5 py-3 font-mono text-xs text-gray-600">{a.numeroSerie ?? '-'}</td>
                   <td className="px-5 py-3 text-gray-700">{fmt(a.tipo)}</td>
                   <td className="px-5 py-3 text-gray-700">{a.marca} {a.modelo ? `/ ${a.modelo}` : ''}</td>
                   <td className="px-5 py-3"><Badge variant={assetStatusVariant(a.estado)}>{fmt(a.estado)}</Badge></td>
-                  <td className="px-5 py-3 text-gray-500">{clientName(a.clienteId)}</td>
+                  <td className="px-5 py-3 text-gray-500">{a.empresa}</td>
+                  <td className="px-5 py-3 text-gray-500">{a.cantidad}</td>
                   <td className="px-5 py-3 text-gray-400">{formatDate(a.createdAt)}</td>
                   <td className="px-5 py-3">
-                    <button onClick={() => openEdit(a)} className="rounded p-1 hover:bg-gray-100 text-gray-400 hover:text-primary"><Pencil className="h-4 w-4" /></button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEdit(a)} className="rounded p-1 hover:bg-gray-100 text-gray-400 hover:text-primary" aria-label="Editar activo">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(a)} className="rounded p-1 hover:bg-red-50 text-gray-400 hover:text-red-600" aria-label="Eliminar activo">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -202,12 +310,23 @@ export default function AssetsPage() {
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar activo' : 'Nuevo activo'} maxWidth="lg">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Cliente *</label>
-            <select className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" value={form.clienteId} onChange={f('clienteId')} required>
-              <option value="">Seleccionar...</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>)}
+            <label className="text-sm font-medium text-gray-700">Empresa *</label>
+            <select
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+              value={form.empresa}
+              onChange={f('empresa')}
+              required
+            >
+              <option value="">Seleccionar empresa...</option>
+              {empresasDisponibles.map((empresa) => (
+                <option key={empresa} value={empresa}>{empresa}</option>
+              ))}
             </select>
+            {empresasDisponibles.length === 0 && (
+              <p className="text-xs text-amber-700">No hay empresas registradas en clientes.</p>
+            )}
           </div>
+          <Input label="Cantidad *" type="number" min={1} value={form.cantidad} onChange={f('cantidad')} required />
           <Input label="Nombre del equipo *" value={form.nombre} onChange={f('nombre')} required />
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -254,6 +373,7 @@ export default function AssetsPage() {
               </datalist>
             </div>
           </div>
+
           <Input label="Numero de serie *" value={form.numeroSerie} onChange={f('numeroSerie')} required />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Descripcion</label>

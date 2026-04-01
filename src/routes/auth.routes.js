@@ -3,6 +3,7 @@
 const { Router }          = require('express');
 const { body, validationResult } = require('express-validator');
 const { login }           = require('../controllers/technician.controller');
+const { loginClient }     = require('../controllers/client.controller');
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const validate = (req, res, next) => {
   next();
 };
 
-// POST /api/auth/login
+// POST /api/auth/login (Técnicos/Admin)
 router.post(
   '/login',
   [
@@ -32,6 +33,22 @@ router.post(
     validate,
   ],
   login
+);
+
+// POST /api/auth/client-login (Clientes)
+router.post(
+  '/client-login',
+  [
+    body('email')
+      .trim()
+      .notEmpty().withMessage('El email es requerido.')
+      .isEmail().withMessage('Debe ser un email válido.')
+      .normalizeEmail(),
+    body('password')
+      .notEmpty().withMessage('La contraseña es requerida.'),
+    validate,
+  ],
+  loginClient
 );
 
 module.exports = router;

@@ -42,10 +42,19 @@ const bodyRules = {
                                   .isLength({ max: 100 }).withMessage('Máximo 100 caracteres.'),
   fechaVencimiento: body('fechaVencimiento').optional({ nullable: true })
                                              .isISO8601().withMessage('La fecha debe tener formato ISO 8601.'),
-  clienteId:         body('clienteId').notEmpty().withMessage('El clienteId es requerido.')
-                                       .isUUID().withMessage('El clienteId debe ser un UUID válido.'),
+  clienteId:         body('clienteId').custom((value, { req }) => {
+                                       if (req.user?.type === 'CLIENT') return true;
+                                       if (!value) throw new Error('El clienteId es requerido.');
+                                       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                                       if (!uuidRegex.test(String(value))) {
+                                         throw new Error('El clienteId debe ser un UUID válido.');
+                                       }
+                                       return true;
+                                     }),
   activoId:          body('activoId').optional({ nullable: true })
                                       .isUUID().withMessage('El activoId debe ser un UUID válido.'),
+  cantidadActivosAfectados: body('cantidadActivosAfectados').optional({ nullable: true })
+                             .isInt({ min: 1 }).withMessage('cantidadActivosAfectados debe ser un entero mayor o igual a 1.'),
   tecnicoAsignadoId: body('tecnicoAsignadoId').optional({ nullable: true })
                                                .isUUID().withMessage('El tecnicoAsignadoId debe ser un UUID válido.'),
 };
@@ -80,6 +89,14 @@ router.post(
     bodyRules.fechaVencimiento,
     bodyRules.clienteId,
     bodyRules.activoId,
+    bodyRules.cantidadActivosAfectados,
+    body('cantidadActivosAfectados').custom((value, { req }) => {
+      if (value === undefined || value === null || value === '') return true;
+      if (!req.body.activoId) {
+        throw new Error('Debe seleccionar un activo para indicar cantidad de activos afectados.');
+      }
+      return true;
+    }),
     bodyRules.tecnicoAsignadoId,
     validate,
   ],
@@ -99,6 +116,14 @@ router.put(
     bodyRules.fechaVencimiento,
     body('clienteId').optional().isUUID().withMessage('El clienteId debe ser un UUID válido.'),
     bodyRules.activoId,
+    bodyRules.cantidadActivosAfectados,
+    body('cantidadActivosAfectados').custom((value, { req }) => {
+      if (value === undefined || value === null || value === '') return true;
+      if (!req.body.activoId) {
+        throw new Error('Debe seleccionar un activo para indicar cantidad de activos afectados.');
+      }
+      return true;
+    }),
     bodyRules.tecnicoAsignadoId,
     validate,
   ],
@@ -112,6 +137,27 @@ router.patch(
     uuidParam,
     body('estado').notEmpty().withMessage('El estado es requerido.')
                   .isIn(ESTADOS).withMessage(`Estado inválido. Valores: ${ESTADOS.join(', ')}.`),
+    body('activoEstadoFinal').optional()
+      .isIn(['OPERATIVO', 'DADO_DE_BAJA']).withMessage('activoEstadoFinal inválido. Valores: OPERATIVO, DADO_DE_BAJA.'),
+    body('activoFueReemplazado').optional().isBoolean().withMessage('activoFueReemplazado debe ser booleano.').toBoolean(),
+    body('activosFinalizacion').optional().isArray({ min: 1 }).withMessage('activosFinalizacion debe ser un arreglo con al menos un elemento.'),
+    body('activosFinalizacion.*.estadoFinal').optional()
+      .isIn(['OPERATIVO', 'DADO_DE_BAJA']).withMessage('estadoFinal inválido. Valores: OPERATIVO, DADO_DE_BAJA.'),
+    body('activosFinalizacion.*.fueReemplazado').optional().isBoolean().withMessage('fueReemplazado debe ser booleano.').toBoolean(),
+    body('activosFinalizacion.*.reemplazoTipo').optional()
+      .isIn(['IGUAL', 'DIFERENTE']).withMessage('reemplazoTipo inválido. Valores: IGUAL, DIFERENTE.'),
+    body('activosFinalizacion.*.activoReemplazo.nombre').optional().trim().isLength({ min: 2, max: 120 }).withMessage('activoReemplazo.nombre inválido.'),
+    body('activosFinalizacion.*.activoReemplazo.tipo').optional()
+      .isIn(['COMPUTADORA','LAPTOP','SERVIDOR','IMPRESORA','UPS','SWITCH','ROUTER','FIREWALL','OTRO'])
+      .withMessage('activoReemplazo.tipo inválido.'),
+    body('activosFinalizacion.*.activoReemplazo.marca').optional({ nullable: true }).trim().isLength({ max: 80 }).withMessage('activoReemplazo.marca inválida.'),
+    body('activosFinalizacion.*.activoReemplazo.modelo').optional({ nullable: true }).trim().isLength({ max: 120 }).withMessage('activoReemplazo.modelo inválido.'),
+    body('activosFinalizacion.*.activoReemplazo.numeroSerie').optional().trim().isLength({ min: 4, max: 120 }).withMessage('activoReemplazo.numeroSerie inválido.'),
+    body('activosFinalizacion.*.activoReemplazo.descripcion').optional({ nullable: true }).trim().isLength({ max: 500 }).withMessage('activoReemplazo.descripcion inválida.'),
+    body('repuestos').optional().isArray().withMessage('repuestos debe ser un arreglo.'),
+    body('repuestos.*.repuestoId').optional().isUUID().withMessage('repuestoId debe ser un UUID válido.'),
+    body('repuestos.*.cantidad').optional().isInt({ min: 1 }).withMessage('cantidad debe ser un entero mayor o igual a 1.'),
+    body('notaFinalizacion').optional().trim().isLength({ max: 2000 }).withMessage('notaFinalizacion no puede exceder 2000 caracteres.'),
     validate,
   ],
   updateStatus,

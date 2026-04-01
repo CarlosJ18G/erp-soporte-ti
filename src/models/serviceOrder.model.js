@@ -15,6 +15,7 @@ const includeRelaciones = {
     select: {
       id:       true,
       titulo:   true,
+      descripcion: true,
       estado:   true,
       prioridad: true,
       cliente:  { select: { id: true, nombre: true, apellido: true, empresa: true } },
@@ -44,21 +45,67 @@ const includeConWorkLogs = {
 
 /**
  * Genera un número de orden único con formato OS-YYYYMMDD-XXXX.
- * Cuenta las órdenes creadas hoy para generar el correlativo.
+ * Toma el último número existente del mismo día y suma 1.
  */
 const generarNumero = async () => {
-  const hoy   = new Date();
-  const fecha = hoy.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const prefijo = `OS-${fecha}-`;
 
-  const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  const finDia    = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
-
-  const count = await prisma.serviceOrder.count({
-    where: { createdAt: { gte: inicioDia, lt: finDia } },
+  const ultimaOrden = await prisma.serviceOrder.findFirst({
+    where: { numero: { startsWith: prefijo } },
+    orderBy: { numero: 'desc' },
+    select: { numero: true },
   });
 
-  const correlativo = String(count + 1).padStart(4, '0');
+  const correlativoActual = ultimaOrden?.numero ? Number(ultimaOrden.numero.split('-').pop()) : 0;
+  const correlativo = String(correlativoActual + 1).padStart(4, '0');
   return `OS-${fecha}-${correlativo}`;
+};
+
+const isNumeroUniqueError = (error) =>
+  error?.code === 'P2002';
+
+// Compatibilidad: mientras el enum de BD no tenga todos los tipos nuevos,
+// mapeamos actividades a los tipos legacy persistidos.
+const mapServiceOrderType = (tipo) => {
+  const value = String(tipo || '').trim().toUpperCase();
+  if (!value) return tipo;
+
+  const compat = {
+    DIAGNOSTICO: 'CORRECTIVO',
+    REPARACION: 'CORRECTIVO',
+    CONFIGURACION: 'CONSULTORIA',
+    MANTENIMIENTO: 'PREVENTIVO',
+    CONSULTA: 'CONSULTORIA',
+    OTRO: 'CONSULTORIA',
+  };
+
+  return compat[value] || value;
+};
+
+const parseSuggestedOrderType = (descripcion = '') => {
+  const text = String(descripcion || '');
+  const match = text.match(/\[Tipo de orden sugerido:\s*([^\]]+)\]/i);
+  if (!match?.[1]) return null;
+
+  const normalized = match[1]
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+
+  const allowed = new Set([
+    'DIAGNOSTICO', 'REPARACION', 'INSTALACION', 'CONFIGURACION', 'MANTENIMIENTO', 'CONSULTA', 'OTRO',
+    'CORRECTIVO', 'PREVENTIVO', 'CONSULTORIA',
+  ]);
+
+  return allowed.has(normalized) ? normalized : null;
+};
+
+const normalizeOrderTypeFromTicket = (order) => {
+  if (!order) return order;
+  const suggested = parseSuggestedOrderType(order.ticket?.descripcion);
+  if (!suggested) return order;
+  return { ...order, tipo: suggested };
 };
 
 const ServiceOrderModel = {
@@ -68,14 +115,15 @@ const ServiceOrderModel = {
   findAll: (filters = {}) => {
     const where = { deletedAt: null };
     if (filters.estado)    where.estado    = filters.estado;
-    if (filters.tipo)      where.tipo      = filters.tipo;
+    if (filters.tipo)      where.tipo      = mapServiceOrderType(filters.tipo);
     if (filters.tecnicoId) where.tecnicoId = filters.tecnicoId;
+    if (filters.clienteId) where.ticket = { clienteId: filters.clienteId };
 
     return prisma.serviceOrder.findMany({
       where,
       include: includeRelaciones,
       orderBy: { createdAt: 'desc' },
-    });
+    }).then((orders) => orders.map(normalizeOrderTypeFromTicket));
   },
 
   /**
@@ -85,7 +133,7 @@ const ServiceOrderModel = {
     prisma.serviceOrder.findFirst({
       where:   { id, deletedAt: null },
       include: includeConWorkLogs,
-    }),
+    }).then(normalizeOrderTypeFromTicket),
 
   /**
    * Verifica si ya existe una orden activa para un ticket.
@@ -104,11 +152,27 @@ const ServiceOrderModel = {
    * Crea una nueva orden. Genera el número automáticamente.
    */
   create: async (data) => {
-    const numero = await generarNumero();
-    return prisma.serviceOrder.create({
-      data:    { ...data, numero },
-      include: includeRelaciones,
-    });
+    const maxRetries = 5;
+    const payload = {
+      ...data,
+      ...(data?.tipo ? { tipo: mapServiceOrderType(data.tipo) } : {}),
+    };
+
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      const numero = await generarNumero();
+      try {
+        return await prisma.serviceOrder.create({
+          data:    { ...payload, numero },
+          include: includeRelaciones,
+        }).then(normalizeOrderTypeFromTicket);
+      } catch (error) {
+        if (!isNumeroUniqueError(error) || attempt === maxRetries - 1) throw error;
+      }
+    }
+
+    const fallbackError = new Error('No se pudo generar un número único de orden. Intenta nuevamente.');
+    fallbackError.statusCode = 409;
+    throw fallbackError;
   },
 
   /**
@@ -117,9 +181,12 @@ const ServiceOrderModel = {
   update: (id, data) =>
     prisma.serviceOrder.update({
       where:   { id },
-      data,
+      data: {
+        ...data,
+        ...(data?.tipo ? { tipo: mapServiceOrderType(data.tipo) } : {}),
+      },
       include: includeRelaciones,
-    }),
+    }).then(normalizeOrderTypeFromTicket),
 
   /**
    * Completa la orden y actualiza el ticket a RESUELTO en

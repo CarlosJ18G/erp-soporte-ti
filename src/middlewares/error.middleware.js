@@ -62,7 +62,9 @@ const errorHandler = (err, req, res, _next) => {
   if (err instanceof Prisma.PrismaClientValidationError) {
     return res.status(400).json({
       success: false,
-      message: 'Los datos enviados no tienen el formato esperado.',
+      message: process.env.NODE_ENV === 'production'
+        ? 'Los datos enviados no tienen el formato esperado.'
+        : err.message,
     });
   }
 

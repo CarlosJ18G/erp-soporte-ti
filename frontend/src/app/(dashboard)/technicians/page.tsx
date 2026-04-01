@@ -101,6 +101,8 @@ export default function TechniciansPage() {
   const f = (k: keyof TechForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
 
+  const isEditingSelfAdmin = Boolean(editing && user?.id === editing.id && user?.rol === 'ADMIN');
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -191,10 +193,18 @@ export default function TechniciansPage() {
           <Input label={editing ? 'Nueva contrasena (dejar vacio para no cambiar)' : 'Contrasena *'} type="password" value={form.password ?? ''} onChange={f('password')} required={!editing} />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Rol</label>
-            <select className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" value={form.rol} onChange={f('rol')}>
+            <select
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary disabled:bg-gray-100 disabled:text-gray-500"
+              value={form.rol}
+              onChange={f('rol')}
+              disabled={isEditingSelfAdmin}
+            >
               <option value="TECNICO">TECNICO</option>
               <option value="ADMIN">ADMIN</option>
             </select>
+            {isEditingSelfAdmin && (
+              <p className="text-xs text-amber-700">No puedes quitarte el rol ADMIN a ti mismo.</p>
+            )}
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">

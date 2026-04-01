@@ -11,15 +11,18 @@ import { formatDate } from '@/lib/utils';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-const empty: Partial<Client> = { nombre: '', apellido: '', email: '', telefono: '', empresa: '' };
+type ClientForm = Partial<Client> & { password?: string };
+
+const empty: ClientForm = { nombre: '', apellido: '', email: '', telefono: '', empresa: '', password: '' };
 
 export default function ClientsPage() {
   const { isAdmin } = useAuth();
   const [clients,  setClients]  = useState<Client[]>([]);
+  const [companyFilter, setCompanyFilter] = useState('');
   const [loading,  setLoading]  = useState(true);
   const [open,     setOpen]     = useState(false);
   const [editing,  setEditing]  = useState<Client | null>(null);
-  const [form,     setForm]     = useState<Partial<Client>>(empty);
+  const [form,     setForm]     = useState<ClientForm>(empty);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
 
@@ -31,7 +34,7 @@ export default function ClientsPage() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setEditing(null); setForm(empty); setError(''); setOpen(true); };
-  const openEdit   = (c: Client) => { setEditing(c); setForm(c); setError(''); setOpen(true); };
+  const openEdit   = (c: Client) => { setEditing(c); setForm({ ...c, password: '' }); setError(''); setOpen(true); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,16 +58,36 @@ export default function ClientsPage() {
   const f = (k: keyof Client) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
 
+  const empresas = Array.from(new Set(clients.map((c) => (c.empresa ?? '').trim()).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const filteredClients = companyFilter
+    ? clients.filter((c) => (c.empresa ?? '').trim() === companyFilter)
+    : clients;
+
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{clients.length} cliente(s)</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500">{filteredClients.length} cliente(s)</p>
+          <select
+            className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            aria-label="Filtrar por empresa"
+          >
+            <option value="">Todas las empresas</option>
+            {empresas.map((empresa) => (
+              <option key={empresa} value={empresa}>{empresa}</option>
+            ))}
+          </select>
+        </div>
         <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Nuevo cliente</Button>
       </div>
 
-      {clients.length === 0 ? (
+      {filteredClients.length === 0 ? (
         <EmptyState title="Sin clientes" action={<Button size="sm" onClick={openCreate}>Agregar</Button>} />
       ) : (
         <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-x-auto">
@@ -80,7 +103,7 @@ export default function ClientsPage() {
               </tr>
             </thead>
             <tbody>
-              {clients.map(c => (
+              {filteredClients.map(c => (
                 <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-5 py-3 font-medium text-gray-900">{c.nombre} {c.apellido}</td>
                   <td className="px-5 py-3 text-gray-500">{c.email}</td>
@@ -113,6 +136,13 @@ export default function ClientsPage() {
             <Input label="Apellido *" value={form.apellido ?? ''} onChange={f('apellido')} required />
           </div>
           <Input label="Email *" type="email" value={form.email ?? ''} onChange={f('email')} required />
+          <Input
+            label={editing ? 'Nueva contraseña (opcional)' : 'Contraseña *'}
+            type="password"
+            value={form.password ?? ''}
+            onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+            required={!editing}
+          />
           <Input label="Telefono" value={form.telefono ?? ''} onChange={f('telefono')} />
           <Input label="Empresa" value={form.empresa ?? ''} onChange={f('empresa')} />
           {error && <p className="text-sm text-red-600">{error}</p>}

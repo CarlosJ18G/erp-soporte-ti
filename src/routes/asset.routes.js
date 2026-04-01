@@ -46,17 +46,19 @@ const bodyRules = {
                                              .isISO8601().withMessage('La fecha debe tener formato ISO 8601 (YYYY-MM-DD).'),
   estado:          body('estado').optional()
                                   .isIn(ESTADOS_VALIDOS).withMessage(`Estado inválido. Valores: ${ESTADOS_VALIDOS.join(', ')}.`),
-  clienteId:       body('clienteId').notEmpty().withMessage('El clienteId es requerido.')
-                                     .isUUID().withMessage('El clienteId debe ser un UUID válido.'),
+  empresa:         body('empresa').trim().notEmpty().withMessage('La empresa es requerida.')
+                                  .isLength({ max: 150 }).withMessage('Máximo 150 caracteres.'),
+  cantidad:        body('cantidad').notEmpty().withMessage('La cantidad es requerida.')
+                                   .isInt({ min: 1 }).withMessage('La cantidad debe ser un entero mayor o igual a 1.'),
 };
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 
-// GET /api/assets?clienteId=&tipo=&estado=
+// GET /api/assets?empresa=&tipo=&estado=
 router.get(
   '/',
   [
-    query('clienteId').optional().isUUID().withMessage('clienteId debe ser un UUID válido.'),
+    query('empresa').optional().trim().isLength({ max: 150 }).withMessage('empresa inválida.'),
     query('tipo').optional().isIn(TIPOS_VALIDOS).withMessage('tipo inválido.'),
     query('estado').optional().isIn(ESTADOS_VALIDOS).withMessage('estado inválido.'),
     validate,
@@ -78,7 +80,8 @@ router.post(
     bodyRules.numeroSerie,
     bodyRules.descripcion,
     bodyRules.fechaAdquisicion,
-    bodyRules.clienteId,
+    bodyRules.empresa,
+    bodyRules.cantidad,
     validate,
   ],
   create,
@@ -97,7 +100,8 @@ router.put(
     bodyRules.descripcion,
     bodyRules.fechaAdquisicion,
     bodyRules.estado,
-    body('clienteId').optional().isUUID().withMessage('El clienteId debe ser un UUID válido.'),
+    body('empresa').optional().trim().isLength({ max: 150 }).withMessage('Máximo 150 caracteres.'),
+    body('cantidad').optional().isInt({ min: 1 }).withMessage('La cantidad debe ser un entero mayor o igual a 1.'),
     validate,
   ],
   update,

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Public_Sans } from 'next/font/google';
-import { AuthProvider } from '@/context/AuthContext';
+import Providers from '@/components/Providers';
 import './globals.css';
 
 const publicSans = Public_Sans({ subsets: ['latin'] });
@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body className={publicSans.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

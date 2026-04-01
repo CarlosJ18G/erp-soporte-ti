@@ -35,6 +35,8 @@ export type AssetStatus = 'OPERATIVO' | 'EN_REPARACION' | 'DADO_DE_BAJA';
 export interface Asset {
   id: string;
   nombre: string;
+  empresa: string;
+  cantidad: number;
   tipo: AssetType;
   marca?: string;
   modelo?: string;
@@ -42,8 +44,7 @@ export interface Asset {
   descripcion?: string;
   fechaAdquisicion?: string;
   estado: AssetStatus;
-  clienteId: string;
-  cliente?: Pick<Client, 'id' | 'nombre' | 'apellido' | 'empresa'>;
+  clienteId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +59,7 @@ export interface Ticket {
   prioridad: TicketPriority;
   estado: TicketStatus;
   categoria?: string;
+  cantidadActivosAfectados?: number;
   fechaVencimiento?: string;
   clienteId: string;
   activoId?: string;
@@ -70,7 +72,9 @@ export interface Ticket {
 }
 
 export type ServiceOrderStatus = 'PENDIENTE' | 'EN_PROGRESO' | 'COMPLETADA' | 'CANCELADA';
-export type ServiceOrderType   = 'CORRECTIVO' | 'PREVENTIVO' | 'INSTALACION' | 'CONSULTORIA';
+export type ServiceOrderType   =
+  | 'DIAGNOSTICO' | 'REPARACION' | 'INSTALACION' | 'CONFIGURACION' | 'MANTENIMIENTO' | 'CONSULTA' | 'OTRO'
+  | 'CORRECTIVO' | 'PREVENTIVO' | 'CONSULTORIA';
 
 export interface ServiceOrder {
   id: string;
@@ -133,7 +137,7 @@ export interface WorkLog {
   ordenServicioId: string;
   tecnicoId: string;
   ordenServicio?: Pick<ServiceOrder, 'id' | 'numero' | 'estado' | 'tipo'>;
-  tecnico?: Pick<Technician, 'id' | 'nombre' | 'apellido'>;
+  tecnico?: Pick<Technician, 'id' | 'nombre' | 'apellido' | 'especialidad' | 'email'>;
   createdAt: string;
   updatedAt: string;
 }

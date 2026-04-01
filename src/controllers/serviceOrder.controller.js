@@ -20,7 +20,12 @@ const { matchedData }     = require('express-validator');
 const ESTADOS_TERMINALES = ['COMPLETADA', 'CANCELADA'];
 
 const esAdmin = (user) => user?.rol === 'ADMIN';
-const puedeAccederOrden = (user, orden) => esAdmin(user) || orden?.tecnico?.id === user?.id;
+const esCliente = (user) => user?.type === 'CLIENT';
+const puedeAccederOrden = (user, orden) => {
+  if (esAdmin(user)) return true;
+  if (esCliente(user)) return orden?.ticket?.cliente?.id === user?.id;
+  return orden?.tecnico?.id === user?.id;
+};
 
 // GET /api/service-orders
 const getAll = async (req, res, next) => {
@@ -28,8 +33,14 @@ const getAll = async (req, res, next) => {
     const { estado, tipo, tecnicoId } = req.query;
     const filters = { estado, tipo, tecnicoId };
 
-    // Alcance por rol: ADMIN ve todo, TECNICO solo sus órdenes asignadas.
-    if (!esAdmin(req.user)) {
+    // Alcance por rol:
+    // - ADMIN ve todo
+    // - CLIENT ve solo órdenes de sus tickets
+    // - TECNICO ve solo sus órdenes asignadas
+    if (esCliente(req.user)) {
+      filters.clienteId = req.user.id;
+      delete filters.tecnicoId;
+    } else if (!esAdmin(req.user)) {
       filters.tecnicoId = req.user.id;
     }
 
@@ -80,14 +91,20 @@ const create = async (req, res, next) => {
       return next(createHttpError(409, `El ticket ya tiene la orden activa #${ordenExistente.numero}.`));
     }
 
+    // Si no se envía tecnicoId, usar el técnico ya asignado en el ticket.
+    body.tecnicoId = body.tecnicoId ?? ticket.tecnicoAsignadoId;
+    if (!body.tecnicoId) {
+      return next(createHttpError(400, 'El ticket no tiene técnico asignado. Asigna un técnico al ticket o envía tecnicoId al crear la orden.'));
+    }
+
     // Verificar que el técnico existe
     const tecnico = await TechnicianModel.findById(body.tecnicoId);
     if (!tecnico) {
       return next(createHttpError(404, 'El técnico especificado no existe.'));
     }
 
-    // Auto-setear fechaInicio con la hora actual
-    body.fechaInicio = new Date();
+    // La fecha de inicio debe coincidir con la creación del ticket asociado.
+    body.fechaInicio = ticket.createdAt;
 
     const order = await ServiceOrderModel.create(body);
 
@@ -160,6 +177,12 @@ const updateStatus = async (req, res, next) => {
     if (estado === 'COMPLETADA') {
       const orderActualizada = await ServiceOrderModel.completarConRepuestos(id, existing.ticket.id, repuestos);
       return res.status(200).json({ success: true, data: orderActualizada });
+    }
+
+    if (estado === 'EN_PROGRESO') {
+      const updated = await ServiceOrderModel.update(id, { estado });
+      await TicketModel.update(existing.ticket.id, { estado: 'EN_PROGRESO' });
+      return res.status(200).json({ success: true, data: updated });
     }
 
     const updated = await ServiceOrderModel.update(id, { estado });

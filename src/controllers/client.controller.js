@@ -1,8 +1,14 @@
 'use strict';
 
+const bcrypt                    = require('bcryptjs');
+const jwt                       = require('jsonwebtoken');
 const ClientModel                = require('../models/client.model');
 const { createHttpError }        = require('../middlewares/error.middleware');
 const { matchedData }            = require('express-validator');
+
+const SALT_ROUNDS = 10;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**
  * Controlador del módulo Client.
@@ -50,6 +56,8 @@ const create = async (req, res, next) => {
       return next(createHttpError(409, `El email '${body.email}' ya está registrado.`));
     }
 
+    body.password = await bcrypt.hash(body.password, SALT_ROUNDS);
+
     const client = await ClientModel.create(body);
     res.status(201).json({ success: true, data: client });
   } catch (error) {
@@ -76,6 +84,10 @@ const update = async (req, res, next) => {
       }
     }
 
+    if (body.password) {
+      body.password = await bcrypt.hash(body.password, SALT_ROUNDS);
+    }
+
     const updated = await ClientModel.update(id, body);
     res.status(200).json({ success: true, data: updated });
   } catch (error) {
@@ -100,4 +112,38 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getById, create, update, remove };
+// POST /api/auth/client-login
+const loginClient = async (req, res, next) => {
+  try {
+    const { email, password } = matchedData(req);
+
+    const client = await ClientModel.findByEmailWithPassword(email);
+    if (!client || !client.password) {
+      return next(createHttpError(401, 'Email o contraseña incorrectos.'));
+    }
+
+    const passwordMatch = await bcrypt.compare(password, client.password);
+    if (!passwordMatch) {
+      return next(createHttpError(401, 'Email o contraseña incorrectos.'));
+    }
+
+    const token = jwt.sign(
+      { id: client.id, email: client.email, type: 'CLIENT' },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    const { password: _, ...clientData } = client;
+    res.status(200).json({
+      success: true,
+      data: {
+        token,
+        client: clientData,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getAll, getById, create, update, remove, loginClient };

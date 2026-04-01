@@ -3,6 +3,7 @@
 const { Router }                                  = require('express');
 const { body, param, validationResult }           = require('express-validator');
 const { getAll, getById, create, update, remove } = require('../controllers/client.controller');
+const { authenticate, isAdmin }                   = require('../middlewares/auth.middleware');
 
 const router = Router();
 
@@ -41,7 +42,11 @@ const bodyRules = {
                             .trim()
                             .isLength({ max: 150 }).withMessage('Máximo 150 caracteres.'),
   direccion: body('direccion').optional({ nullable: true }).trim(),
+  password: body('password').notEmpty().withMessage('La contraseña es requerida.')
+                           .isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres.'),
 };
+
+router.use(authenticate);
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 
@@ -58,10 +63,12 @@ router.get(
 // POST /api/clients
 router.post(
   '/',
+  isAdmin,
   [
     bodyRules.nombre,
     bodyRules.apellido,
     bodyRules.email,
+    bodyRules.password,
     bodyRules.telefono,
     bodyRules.empresa,
     bodyRules.direccion,
@@ -73,11 +80,13 @@ router.post(
 // PUT /api/clients/:id
 router.put(
   '/:id',
+  isAdmin,
   [
     uuidParam,
     bodyRules.nombre.optional(),
     bodyRules.apellido.optional(),
     bodyRules.email.optional(),
+    body('password').optional().isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres.'),
     bodyRules.telefono,
     bodyRules.empresa,
     bodyRules.direccion,
@@ -89,6 +98,7 @@ router.put(
 // DELETE /api/clients/:id
 router.delete(
   '/:id',
+  isAdmin,
   [uuidParam, validate],
   remove
 );

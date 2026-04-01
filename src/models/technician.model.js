@@ -35,6 +35,40 @@ const TechnicianModel = {
     }),
 
   /**
+   * Técnicos elegibles para auto-asignación de tickets.
+   */
+  findAssignable: () =>
+    prisma.technician.findMany({
+      where: { deletedAt: null, activo: true, rol: 'TECNICO' },
+      select: safeSelect,
+      orderBy: { createdAt: 'asc' },
+    }),
+
+  /**
+   * Carga actual de tickets no cerrados por técnico.
+   * @returns {Promise<Map<string, number>>}
+   */
+  getTicketLoadMap: async (technicianIds = []) => {
+    if (!technicianIds.length) return new Map();
+
+    const grouped = await prisma.ticket.groupBy({
+      by: ['tecnicoAsignadoId'],
+      where: {
+        deletedAt: null,
+        estado: { not: 'CERRADO' },
+        tecnicoAsignadoId: { in: technicianIds },
+      },
+      _count: { _all: true },
+    });
+
+    const loadMap = new Map();
+    for (const row of grouped) {
+      if (row.tecnicoAsignadoId) loadMap.set(row.tecnicoAsignadoId, row._count._all);
+    }
+    return loadMap;
+  },
+
+  /**
    * Busca un técnico por ID (sin password).
    */
   findById: (id) =>

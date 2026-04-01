@@ -40,6 +40,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = async (email: string, password: string) => {
     const res = await api.post<AuthResponse>('/auth/login', { email, password });
     if (res.data) {
+      localStorage.removeItem('clientToken');
+      localStorage.removeItem('clientUser');
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user',  JSON.stringify(res.data.technician));
       setAuthState({ token: res.data.token, user: res.data.technician });

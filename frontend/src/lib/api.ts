@@ -4,7 +4,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 const getToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
+
+  const path = window.location.pathname;
+  const techToken = localStorage.getItem('token');
+  const clientToken = localStorage.getItem('clientToken');
+
+  // En rutas cliente se prioriza token de cliente.
+  if (path.startsWith('/client-')) {
+    return clientToken || techToken;
+  }
+
+  return techToken || clientToken;
 };
 
 interface RequestOptions extends RequestInit {

@@ -12,7 +12,7 @@ const includeRelaciones = {
     select: { id: true, numero: true, estado: true, tipo: true },
   },
   tecnico: {
-    select: { id: true, nombre: true, apellido: true },
+    select: { id: true, nombre: true, apellido: true, email: true, especialidad: true },
   },
 };
 

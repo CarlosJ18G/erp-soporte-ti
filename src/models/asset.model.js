@@ -4,31 +4,23 @@ const prisma = require('../config/database');
 
 /**
  * Capa de acceso a datos para el módulo Asset.
- * Incluye siempre los datos básicos del cliente propietario.
+ * Los activos se registran por nombre de empresa.
  * Los filtros de soft delete se aplican aquí.
  */
-
-// Relación incluida por defecto en las consultas
-const includeCliente = {
-  cliente: {
-    select: { id: true, nombre: true, apellido: true, empresa: true },
-  },
-};
 
 const AssetModel = {
   /**
    * Lista activos no eliminados con filtros opcionales.
-   * @param {object} filters - { clienteId, tipo, estado }
+   * @param {object} filters - { empresa, tipo, estado }
    */
   findAll: (filters = {}) => {
     const where = { deletedAt: null };
-    if (filters.clienteId) where.clienteId = filters.clienteId;
-    if (filters.tipo)      where.tipo       = filters.tipo;
-    if (filters.estado)    where.estado     = filters.estado;
+    if (filters.empresa) where.empresa = filters.empresa;
+    if (filters.tipo)    where.tipo = filters.tipo;
+    if (filters.estado)  where.estado = filters.estado;
 
     return prisma.asset.findMany({
       where,
-      include: includeCliente,
       orderBy: { createdAt: 'desc' },
     });
   },
@@ -38,8 +30,7 @@ const AssetModel = {
    */
   findById: (id) =>
     prisma.asset.findFirst({
-      where:   { id, deletedAt: null },
-      include: includeCliente,
+      where: { id, deletedAt: null },
     }),
 
   /**
@@ -61,7 +52,6 @@ const AssetModel = {
   create: (data) =>
     prisma.asset.create({
       data,
-      include: includeCliente,
     }),
 
   /**
@@ -69,9 +59,8 @@ const AssetModel = {
    */
   update: (id, data) =>
     prisma.asset.update({
-      where:   { id },
+      where: { id },
       data,
-      include: includeCliente,
     }),
 
   /**

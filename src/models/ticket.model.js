@@ -38,7 +38,8 @@ const TicketModel = {
       where,
       include: includeRelaciones,
       orderBy: [
-        // Primero los más urgentes, luego los más recientes
+        // Primero por estado (ABIERTO -> ... -> CERRADO), luego urgencia y recencia.
+        { estado: 'asc' },
         { prioridad: 'desc' },
         { createdAt: 'desc' },
       ],

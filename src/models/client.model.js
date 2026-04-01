@@ -2,6 +2,20 @@
 
 const prisma = require('../config/database');
 
+const safeSelect = {
+  id: true,
+  nombre: true,
+  apellido: true,
+  email: true,
+  telefono: true,
+  empresa: true,
+  direccion: true,
+  activo: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+};
+
 /**
  * Capa de acceso a datos para el módulo Client.
  * Toda interacción con Prisma ocurre exclusivamente aquí.
@@ -15,6 +29,7 @@ const ClientModel = {
   findAll: () =>
     prisma.client.findMany({
       where:   { deletedAt: null },
+      select:  safeSelect,
       orderBy: { createdAt: 'desc' },
     }),
 
@@ -24,6 +39,7 @@ const ClientModel = {
   findById: (id) =>
     prisma.client.findFirst({
       where: { id, deletedAt: null },
+      select: safeSelect,
     }),
 
   /**
@@ -37,13 +53,19 @@ const ClientModel = {
         deletedAt: null,
         ...(excludeId && { id: { not: excludeId } }),
       },
+      select: { id: true },
+    }),
+
+  findByEmailWithPassword: (email) =>
+    prisma.client.findFirst({
+      where: { email, deletedAt: null, activo: true },
     }),
 
   /**
    * Crea un nuevo cliente.
    */
   create: (data) =>
-    prisma.client.create({ data }),
+    prisma.client.create({ data, select: safeSelect }),
 
   /**
    * Actualiza los campos de un cliente existente.
@@ -52,6 +74,7 @@ const ClientModel = {
     prisma.client.update({
       where: { id },
       data,
+      select: safeSelect,
     }),
 
   /**
@@ -62,6 +85,7 @@ const ClientModel = {
     prisma.client.update({
       where: { id },
       data:  { deletedAt: new Date(), activo: false },
+      select: safeSelect,
     }),
 };
 

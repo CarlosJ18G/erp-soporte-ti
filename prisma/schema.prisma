@@ -60,10 +60,16 @@ enum ServiceOrderStatus {
 }
 
 enum ServiceOrderType {
+  DIAGNOSTICO
+  REPARACION
   CORRECTIVO
+  CONFIGURACION
+  MANTENIMIENTO
   PREVENTIVO
   INSTALACION
+  CONSULTA
   CONSULTORIA
+  OTRO
 }
 
 enum WorkLogActivity {
@@ -83,6 +89,7 @@ model Client {
   nombre    String
   apellido  String
   email     String    @unique
+  password  String?
   telefono  String?
   empresa   String?
   direccion String?
@@ -128,12 +135,14 @@ model Asset {
   descripcion      String?
   fechaAdquisicion DateTime?   @map("fecha_adquisicion")
   estado           AssetStatus @default(OPERATIVO)
-  clienteId        String      @map("cliente_id")
+  empresa          String
+  cantidad         Int         @default(1)
+  clienteId        String?     @map("cliente_id")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
   deletedAt        DateTime?   @map("deleted_at")
 
-  cliente Client   @relation(fields: [clienteId], references: [id])
+  cliente Client?  @relation(fields: [clienteId], references: [id])
   tickets Ticket[]
 
   @@map("assets")
@@ -146,6 +155,7 @@ model Ticket {
   prioridad         TicketPriority @default(MEDIA)
   estado            TicketStatus   @default(ABIERTO)
   categoria         String?
+  cantidadActivosAfectados Int?   @map("cantidad_activos_afectados")
   fechaVencimiento  DateTime?      @map("fecha_vencimiento")
   clienteId         String         @map("cliente_id")
   activoId          String?        @map("activo_id")

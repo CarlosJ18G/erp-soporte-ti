@@ -24,7 +24,10 @@ const validate = (req, res, next) => {
 
 // ─── Valores permitidos ───────────────────────────────────────────────────────
 const ESTADOS = ['PENDIENTE', 'EN_PROGRESO', 'COMPLETADA', 'CANCELADA'];
-const TIPOS   = ['CORRECTIVO', 'PREVENTIVO', 'INSTALACION', 'CONSULTORIA'];
+const TIPOS   = [
+  'DIAGNOSTICO', 'REPARACION', 'INSTALACION', 'CONFIGURACION', 'MANTENIMIENTO', 'CONSULTA', 'OTRO',
+  'CORRECTIVO', 'PREVENTIVO', 'CONSULTORIA',
+];
 
 // ─── Reglas reutilizables ─────────────────────────────────────────────────────
 const uuidParam = param('id')
@@ -72,7 +75,7 @@ router.post(
     bodyRules.tipo,
     bodyRules.notas,
     bodyRules.ticketId,
-    bodyRules.tecnicoId,
+    body('tecnicoId').optional().isUUID().withMessage('El tecnicoId debe ser un UUID válido.'),
     validate,
   ],
   create,
