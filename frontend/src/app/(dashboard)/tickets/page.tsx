@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { Ticket, Client, Asset, Technician, SparePart } from '@/types';
+import { Ticket, Client, Asset, Technician, SparePart, ServiceOrder } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -75,6 +75,7 @@ export default function TicketsPage() {
   const priorityFilter = searchParams.get('prioridad') ?? undefined;
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [techs, setTechs] = useState<Technician[]>([]);
@@ -128,6 +129,7 @@ export default function TicketsPage() {
             ...(clienteFilter ? { clienteId: clienteFilter } : {}),
           })
           .then((r) => setTickets(r.data ?? [])),
+        api.get<ServiceOrder[]>('/service-orders').then((r) => setServiceOrders(r.data ?? [])),
         api.get<Client[]>('/clients').then((r) => setClients(r.data ?? [])),
         api.get<Asset[]>('/assets').then((r) => setAssets(r.data ?? [])),
         api.get<Technician[]>('/technicians').then((r) => setTechs(r.data ?? [])),
@@ -169,6 +171,27 @@ export default function TicketsPage() {
   const clientAssets = assets.filter(
     (a) => selectedClient?.empresa && a.empresa === selectedClient.empresa && a.estado === 'OPERATIVO',
   );
+
+  const getOrderForTicket = useCallback(
+    (ticketId: string) => serviceOrders.find((order) => order.ticketId === ticketId),
+    [serviceOrders],
+  );
+
+  const buildRepuestosFromOrder = useCallback(
+    (ticketId: string) => {
+      const order = getOrderForTicket(ticketId);
+      if (!order?.repuestosUsados?.length) return [makeEmptyRepuesto()];
+
+      const repuestosEditables = order.repuestosUsados.map((item) => ({
+        repuestoId: item.repuestoId,
+        cantidad: String(item.cantidad),
+      }));
+
+      return repuestosEditables.length > 0 ? repuestosEditables : [makeEmptyRepuesto()];
+    },
+    [getOrderForTicket],
+  );
+
   const clientsForCreateTicket = useMemo(
     () => clients.filter((c) => !createEmpresa || c.empresa === createEmpresa),
     [clients, createEmpresa],
@@ -226,6 +249,7 @@ export default function TicketsPage() {
 
   const handleFinalize = (ticket: Ticket) => {
     const cantidad = ticket.activoId ? Math.max(1, Number(ticket.cantidadActivosAfectados ?? 1)) : 0;
+    const repuestosIniciales = buildRepuestosFromOrder(ticket.id);
 
     setFinalizeModal({
       open: true,
@@ -243,7 +267,7 @@ export default function TicketsPage() {
           descripcion: '',
         },
       })),
-      repuestos: [makeEmptyRepuesto()],
+      repuestos: repuestosIniciales,
       notaFinalizacion: '',
     });
   };
