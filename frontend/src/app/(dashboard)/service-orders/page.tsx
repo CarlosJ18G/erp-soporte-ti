@@ -38,11 +38,32 @@ export default function ServiceOrdersPage() {
     error?: string 
   }>({ open: false });
 
-  const load = () => Promise.all([
-    api.get<ServiceOrder[]>('/service-orders').then(r => setOrders(r.data ?? [])),
-    api.get<Ticket[]>('/tickets').then(r => setTickets(r.data ?? [])),
-    api.get<Technician[]>('/technicians').then(r => setTechs(r.data ?? [])),
-  ]).finally(() => setLoading(false));
+  const load = () =>
+    Promise.all([
+      api.get<ServiceOrder[]>('/service-orders'),
+      api.get<Ticket[]>('/tickets', { params: { mostrarCerrados: true } }),
+      api.get<Technician[]>('/technicians'),
+    ])
+      .then(([ordersRes, ticketsRes, techsRes]) => {
+        const ordersData = ordersRes.data ?? [];
+        const ticketsData = ticketsRes.data ?? [];
+        const techsData = techsRes.data ?? [];
+
+        const ticketNumeroById = new Map(ticketsData.map((t) => [t.id, t.numero]));
+        const hydratedOrders = ordersData.map((o) => ({
+          ...o,
+          ticket: {
+            ...(o.ticket ?? {}),
+            id: o.ticket?.id ?? o.ticketId,
+            numero: o.ticket?.numero ?? ticketNumeroById.get(o.ticketId),
+          },
+        }));
+
+        setOrders(hydratedOrders);
+        setTickets(ticketsData);
+        setTechs(techsData);
+      })
+      .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 
@@ -109,9 +130,10 @@ export default function ServiceOrdersPage() {
     const nombreCliente = t.cliente
       ? `${t.cliente.nombre} ${t.cliente.apellido}`.trim()
       : 'Cliente no disponible';
-    return `${t.titulo} - ${nombreCliente}`;
+    return `${t.numero ?? '-'} - ${t.titulo} - ${nombreCliente}`;
   };
-  const ticketSubject = (id: string) => tickets.find(t => t.id === id)?.titulo ?? id;
+  const ticketNumero = (ticketId: string, numeroDesdeOrden?: string) =>
+    numeroDesdeOrden ?? tickets.find((t) => t.id === ticketId)?.numero ?? '-';
   const techName = (id?: string) => { if (!id) return '-'; const t = techs.find(t => t.id === id); return t ? `${t.nombre} ${t.apellido}` : '-'; };
   const empresasDisponibles = useMemo(
     () => Array.from(new Set(orders.map((o) => o.ticket?.cliente?.empresa).filter(Boolean) as string[])).sort(),
@@ -170,7 +192,7 @@ export default function ServiceOrdersPage() {
               <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400">
                 <th className="px-5 py-3">Numero</th>
                 <th className="px-5 py-3">Tipo</th>
-                <th className="px-5 py-3">Ticket</th>
+                <th className="px-5 py-3">N° Ticket</th>
                 <th className="px-5 py-3">Empresa</th>
                 <th className="px-5 py-3">Tecnico</th>
                 <th className="px-5 py-3">C. Final</th>
@@ -188,7 +210,7 @@ export default function ServiceOrdersPage() {
                 >
                   <td className="px-5 py-3 font-mono text-xs font-medium text-gray-700">{o.numero}</td>
                   <td className="px-5 py-3 text-gray-600">{fmt(o.tipo)}</td>
-                  <td className="px-5 py-3 text-gray-600 max-w-xs truncate">{ticketSubject(o.ticketId)}</td>
+                  <td className="px-5 py-3 font-mono text-xs font-medium text-gray-700">{ticketNumero(o.ticketId, o.ticket?.numero)}</td>
                   <td className="px-5 py-3 text-gray-500">{o.ticket?.cliente?.empresa || '-'}</td>
                   <td className="px-5 py-3 text-gray-500">{techName(o.tecnicoId)}</td>
                   <td className="px-5 py-3 text-gray-600">${o.costoFinal ? parseFloat(String(o.costoFinal)).toFixed(2) : '-'}</td>
@@ -270,9 +292,10 @@ export default function ServiceOrdersPage() {
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Ticket y Asignación</h3>
               <div className="flex flex-col gap-4">
                 <div>
-                  <p className="text-xs text-gray-500 font-medium">Ticket</p>
+                  <p className="text-xs text-gray-500 font-medium">N° Ticket</p>
                   <div className="text-sm text-gray-900">
-                    <p className="font-medium">{detailModal.order.ticket?.titulo}</p>
+                    <p className="font-mono text-xs text-gray-600">{ticketNumero(detailModal.order.ticketId, detailModal.order.ticket?.numero)}</p>
+                    <p className="font-medium">{detailModal.order.ticket?.titulo ?? '-'}</p>
                     {detailModal.order.ticket?.cliente && (
                       <>
                         <p className="text-gray-600 text-xs mt-1">

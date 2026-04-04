@@ -14,6 +14,7 @@ const includeRelaciones = {
   ticket: {
     select: {
       id:       true,
+      numero:   true,
       titulo:   true,
       descripcion: true,
       estado:   true,

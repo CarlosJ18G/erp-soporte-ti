@@ -21,6 +21,23 @@ const includeRelaciones = {
   },
 };
 
+const generarNumeroTicket = async () => {
+  const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const prefijo = `T-${fecha}-`;
+
+  const ultimoTicket = await prisma.ticket.findFirst({
+    where: { numero: { startsWith: prefijo } },
+    orderBy: { numero: 'desc' },
+    select: { numero: true },
+  });
+
+  const correlativoActual = ultimoTicket?.numero ? Number(ultimoTicket.numero.split('-').pop()) : 0;
+  const correlativo = String(correlativoActual + 1).padStart(4, '0');
+  return `T-${fecha}-${correlativo}`;
+};
+
+const isNumeroUniqueError = (error) => error?.code === 'P2002';
+
 const TicketModel = {
   /**
    * Lista tickets no eliminados con filtros opcionales.
@@ -58,11 +75,25 @@ const TicketModel = {
   /**
    * Crea un nuevo ticket.
    */
-  create: (data) =>
-    prisma.ticket.create({
-      data,
-      include: includeRelaciones,
-    }),
+  create: async (data) => {
+    const maxRetries = 5;
+
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      const numero = await generarNumeroTicket();
+      try {
+        return await prisma.ticket.create({
+          data: { ...data, numero },
+          include: includeRelaciones,
+        });
+      } catch (error) {
+        if (!isNumeroUniqueError(error) || attempt === maxRetries - 1) throw error;
+      }
+    }
+
+    const fallbackError = new Error('No se pudo generar un número único de ticket. Intenta nuevamente.');
+    fallbackError.statusCode = 409;
+    throw fallbackError;
+  },
 
   /**
    * Actualiza campos de un ticket.

@@ -520,6 +520,7 @@ export default function TicketsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400">
+                <th className="px-5 py-3">Numero</th>
                 <th className="px-5 py-3">Asunto</th>
                 <th className="px-5 py-3">Cliente</th>
                 <th className="px-5 py-3">Empresa</th>
@@ -532,6 +533,7 @@ export default function TicketsPage() {
             <tbody>
               {ticketsFiltrados.map((t) => (
                 <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => openDetail(t)}>
+                  <td className="px-5 py-3 font-mono text-xs font-medium text-gray-700">{t.numero || t.id.slice(0, 8)}</td>
                   <td className="px-5 py-3 font-medium text-gray-900 max-w-xs truncate">{t.titulo}</td>
                   <td className="px-5 py-3 text-gray-500">{clientName(t.clienteId)}</td>
                   <td className="px-5 py-3 text-gray-500">{clientCompany(t.clienteId)}</td>
@@ -553,12 +555,16 @@ export default function TicketsPage() {
       <Modal
         open={detailModal.open}
         onClose={() => setDetailModal({ open: false, changing: false })}
-        title={`Ticket: ${detailModal.ticket?.titulo || ''}`}
+        title={`Ticket ${detailModal.ticket?.numero || detailModal.ticket?.id?.slice(0, 8) || ''}: ${detailModal.ticket?.titulo || ''}`}
         maxWidth="2xl"
       >
         {detailModal.ticket && (
           <div className="flex flex-col gap-5">
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500">Numero</p>
+                <p className="text-sm font-mono font-semibold text-gray-900">{detailModal.ticket.numero || detailModal.ticket.id.slice(0, 8)}</p>
+              </div>
               <div>
                 <p className="text-xs text-gray-500">Cliente</p>
                 <p className="text-sm font-medium text-gray-900">{clientName(detailModal.ticket.clienteId)}</p>

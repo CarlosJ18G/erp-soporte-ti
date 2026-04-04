@@ -150,6 +150,7 @@ model Asset {
 
 model Ticket {
   id                String         @id @default(uuid())
+  numero            String         @unique
   titulo            String
   descripcion       String
   prioridad         TicketPriority @default(MEDIA)

@@ -54,6 +54,7 @@ export type TicketStatus   = 'ABIERTO' | 'EN_PROGRESO' | 'EN_ESPERA' | 'RESUELTO
 
 export interface Ticket {
   id: string;
+  numero: string;
   titulo: string;
   descripcion: string;
   prioridad: TicketPriority;
@@ -88,7 +89,7 @@ export interface ServiceOrder {
   notas?: string;
   ticketId: string;
   tecnicoId: string;
-  ticket?: Pick<Ticket, 'id' | 'titulo' | 'estado' | 'prioridad'> & {
+  ticket?: Pick<Ticket, 'id' | 'numero' | 'titulo' | 'estado' | 'prioridad'> & {
     cliente?: Pick<Client, 'id' | 'nombre' | 'apellido' | 'empresa'>;
   };
   tecnico?: Pick<Technician, 'id' | 'nombre' | 'apellido' | 'especialidad' | 'email'>;

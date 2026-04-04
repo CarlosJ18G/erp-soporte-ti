@@ -54,6 +54,7 @@ export default function ClientTicketsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400">
+                <th className="px-6 py-4">Numero</th>
                 <th className="px-6 py-4">Título</th>
                 <th className="px-6 py-4">Prioridad</th>
                 <th className="px-6 py-4">Estado</th>
@@ -63,6 +64,7 @@ export default function ClientTicketsPage() {
             <tbody>
               {tickets.map((ticket) => (
                 <tr key={ticket.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer">
+                  <td className="px-6 py-4 font-mono text-xs font-medium text-gray-700">{ticket.numero || ticket.id.slice(0, 8)}</td>
                   <td className="px-6 py-4 font-medium text-gray-900">{ticket.titulo}</td>
                   <td className="px-6 py-4">
                     <Badge variant={ticketPriorityVariant(ticket.prioridad)}>{fmt(ticket.prioridad)}</Badge>

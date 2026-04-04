@@ -35,6 +35,23 @@ const isClientUser = (user) => user?.type === 'CLIENT';
 const isTechnicianUser = (user) => user?.type === 'TECHNICIAN';
 const canTechnicianAccessTicket = (user, ticket) => ticket?.tecnicoAsignadoId === user?.id;
 
+const generarNumeroTicket = async (db = prisma) => {
+  const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const prefijo = `T-${fecha}-`;
+
+  const ultimoTicket = await db.ticket.findFirst({
+    where: { numero: { startsWith: prefijo } },
+    orderBy: { numero: 'desc' },
+    select: { numero: true },
+  });
+
+  const correlativoActual = ultimoTicket?.numero ? Number(ultimoTicket.numero.split('-').pop()) : 0;
+  const correlativo = String(correlativoActual + 1).padStart(4, '0');
+  return `T-${fecha}-${correlativo}`;
+};
+
+const isNumeroUniqueError = (error) => error?.code === 'P2002';
+
 const parseSuggestedOrderType = (descripcion = '') => {
   const text = String(descripcion || '');
   const match = text.match(/\[Tipo de orden sugerido:\s*([^\]]+)\]/i);
@@ -274,106 +291,116 @@ const create = async (req, res, next) => {
     }
 
     let createdTicketId = null;
+    const maxRetries = 5;
 
-    await prisma.$transaction(async (tx) => {
-      const createdTicket = await tx.ticket.create({ data: body });
-      createdTicketId = createdTicket.id;
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          const numero = await generarNumeroTicket(tx);
+          const createdTicket = await tx.ticket.create({ data: { ...body, numero } });
+          createdTicketId = createdTicket.id;
 
-      if (body.activoId) {
-        const cantidadAfectada = Number(body.cantidadActivosAfectados || 1);
-        const activoActual = await tx.asset.findUnique({ where: { id: body.activoId } });
+          if (body.activoId) {
+            const cantidadAfectada = Number(body.cantidadActivosAfectados || 1);
+            const activoActual = await tx.asset.findUnique({ where: { id: body.activoId } });
 
-        if (!activoActual || activoActual.deletedAt) {
-          throw createHttpError(404, 'El activo seleccionado no existe.');
-        }
+            if (!activoActual || activoActual.deletedAt) {
+              throw createHttpError(404, 'El activo seleccionado no existe.');
+            }
 
-        if (activoActual.estado !== 'OPERATIVO') {
-          throw createHttpError(400, 'Solo se pueden enviar a reparación activos en estado OPERATIVO.');
-        }
+            if (activoActual.estado !== 'OPERATIVO') {
+              throw createHttpError(400, 'Solo se pueden enviar a reparación activos en estado OPERATIVO.');
+            }
 
-        if (cantidadAfectada > activoActual.cantidad) {
-          throw createHttpError(400, `La cantidad afectada no puede ser mayor a ${activoActual.cantidad}.`);
-        }
+            if (cantidadAfectada > activoActual.cantidad) {
+              throw createHttpError(400, `La cantidad afectada no puede ser mayor a ${activoActual.cantidad}.`);
+            }
 
-        // Caso 1: toda la cantidad pasa a reparación.
-        // Si ya existe el mismo activo en reparación, consolidar cantidades.
-        if (cantidadAfectada === activoActual.cantidad) {
-          const activoReparacionExistente = await tx.asset.findFirst({
-            where: {
-              deletedAt: null,
-              id: { not: activoActual.id },
-              empresa: activoActual.empresa,
-              nombre: activoActual.nombre,
-              tipo: activoActual.tipo,
-              marca: activoActual.marca,
-              modelo: activoActual.modelo,
-              estado: 'EN_REPARACION',
-            },
-          });
+            // Caso 1: toda la cantidad pasa a reparación.
+            // Si ya existe el mismo activo en reparación, consolidar cantidades.
+            if (cantidadAfectada === activoActual.cantidad) {
+              const activoReparacionExistente = await tx.asset.findFirst({
+                where: {
+                  deletedAt: null,
+                  id: { not: activoActual.id },
+                  empresa: activoActual.empresa,
+                  nombre: activoActual.nombre,
+                  tipo: activoActual.tipo,
+                  marca: activoActual.marca,
+                  modelo: activoActual.modelo,
+                  estado: 'EN_REPARACION',
+                },
+              });
 
-          if (activoReparacionExistente) {
-            await tx.asset.update({
-              where: { id: activoReparacionExistente.id },
-              data: { cantidad: { increment: cantidadAfectada } },
-            });
+              if (activoReparacionExistente) {
+                await tx.asset.update({
+                  where: { id: activoReparacionExistente.id },
+                  data: { cantidad: { increment: cantidadAfectada } },
+                });
 
-            await tx.asset.update({
-              where: { id: activoActual.id },
-              data: { deletedAt: new Date() },
-            });
-          } else {
+                await tx.asset.update({
+                  where: { id: activoActual.id },
+                  data: { deletedAt: new Date() },
+                });
+              } else {
+                await tx.asset.update({
+                  where: { id: body.activoId },
+                  data: { estado: 'EN_REPARACION' },
+                });
+              }
+
+              return;
+            }
+
+            // Caso 2: split de inventario entre operativo y en reparación.
             await tx.asset.update({
               where: { id: body.activoId },
-              data: { estado: 'EN_REPARACION' },
+              data: { cantidad: { decrement: cantidadAfectada } },
             });
+
+            const activoReparacion = await tx.asset.findFirst({
+              where: {
+                deletedAt: null,
+                empresa: activoActual.empresa,
+                nombre: activoActual.nombre,
+                tipo: activoActual.tipo,
+                marca: activoActual.marca,
+                modelo: activoActual.modelo,
+                estado: 'EN_REPARACION',
+              },
+            });
+
+            if (activoReparacion) {
+              await tx.asset.update({
+                where: { id: activoReparacion.id },
+                data: { cantidad: { increment: cantidadAfectada } },
+              });
+            } else {
+              await tx.asset.create({
+                data: {
+                  nombre: activoActual.nombre,
+                  tipo: activoActual.tipo,
+                  marca: activoActual.marca,
+                  modelo: activoActual.modelo,
+                  descripcion: activoActual.descripcion,
+                  fechaAdquisicion: activoActual.fechaAdquisicion,
+                  estado: 'EN_REPARACION',
+                  empresa: activoActual.empresa,
+                  cantidad: cantidadAfectada,
+                  clienteId: activoActual.clienteId,
+                  // numeroSerie se deja null para evitar colisión de unicidad.
+                  numeroSerie: null,
+                },
+              });
+            }
           }
-
-          return;
-        }
-
-        // Caso 2: split de inventario entre operativo y en reparación.
-        await tx.asset.update({
-          where: { id: body.activoId },
-          data: { cantidad: { decrement: cantidadAfectada } },
         });
 
-        const activoReparacion = await tx.asset.findFirst({
-          where: {
-            deletedAt: null,
-            empresa: activoActual.empresa,
-            nombre: activoActual.nombre,
-            tipo: activoActual.tipo,
-            marca: activoActual.marca,
-            modelo: activoActual.modelo,
-            estado: 'EN_REPARACION',
-          },
-        });
-
-        if (activoReparacion) {
-          await tx.asset.update({
-            where: { id: activoReparacion.id },
-            data: { cantidad: { increment: cantidadAfectada } },
-          });
-        } else {
-          await tx.asset.create({
-            data: {
-              nombre: activoActual.nombre,
-              tipo: activoActual.tipo,
-              marca: activoActual.marca,
-              modelo: activoActual.modelo,
-              descripcion: activoActual.descripcion,
-              fechaAdquisicion: activoActual.fechaAdquisicion,
-              estado: 'EN_REPARACION',
-              empresa: activoActual.empresa,
-              cantidad: cantidadAfectada,
-              clienteId: activoActual.clienteId,
-              // numeroSerie se deja null para evitar colisión de unicidad.
-              numeroSerie: null,
-            },
-          });
-        }
+        break;
+      } catch (error) {
+        if (!isNumeroUniqueError(error) || attempt === maxRetries - 1) throw error;
       }
-    });
+    }
 
     const ticket = await TicketModel.findById(createdTicketId);
     res.status(201).json({ success: true, data: ticket });
