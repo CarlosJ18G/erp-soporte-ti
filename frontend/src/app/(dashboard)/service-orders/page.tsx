@@ -16,6 +16,49 @@ const TIPOS = ['DIAGNOSTICO','REPARACION','INSTALACION','CONFIGURACION','MANTENI
 interface OrderForm { ticketId: string; tecnicoId: string; tipo: string; descripcion: string; }
 const empty: OrderForm = { ticketId: '', tecnicoId: '', tipo: 'DIAGNOSTICO', descripcion: '' };
 
+type NoteSection = {
+  title: string;
+  items: string[];
+};
+
+const parseOrderNotes = (notes?: string): NoteSection[] => {
+  if (!notes?.trim()) return [];
+
+  return notes
+    .split(/\n\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const [firstLine, ...rest] = lines;
+      const title = (firstLine || 'Notas').replace(/:$/, '');
+      const rawItems = rest.length > 0 ? rest : lines.slice(1);
+
+      const items = rawItems.length > 0
+        ? rawItems.map((line) => line.replace(/^[-•]\s*/, '').trim()).filter(Boolean)
+        : [];
+
+      return { title, items };
+    });
+};
+
+const parseOrderDescription = (description?: string) => {
+  const text = description?.trim() || '';
+  if (!text) return { suggestion: '', body: '' };
+
+  const match = text.match(/^\[Tipo de orden sugerido:\s*([^\]]+)\]\s*([\s\S]*)$/i);
+  if (!match) return { suggestion: '', body: text };
+
+  return {
+    suggestion: match[1].trim(),
+    body: match[2].trim(),
+  };
+};
+
 export default function ServiceOrdersPage() {
   const { isAdmin } = useAuth();
   const [orders,  setOrders]  = useState<ServiceOrder[]>([]);
@@ -324,7 +367,22 @@ export default function ServiceOrdersPage() {
             {detailModal.order.descripcion && (
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">Descripción</h3>
-                <p className="text-sm text-gray-700 bg-gray-50 rounded p-3">{detailModal.order.descripcion}</p>
+                {(() => {
+                  const parsed = parseOrderDescription(detailModal.order.descripcion);
+                  return (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+                      {parsed.suggestion ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sugerencia</span>
+                          <Badge variant="info">{parsed.suggestion}</Badge>
+                        </div>
+                      ) : null}
+                      <p className="text-sm text-gray-700 whitespace-pre-line">
+                        {parsed.body || detailModal.order.descripcion}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -332,7 +390,25 @@ export default function ServiceOrdersPage() {
             {detailModal.order.notas && (
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">Notas</h3>
-                <p className="text-sm text-gray-700 bg-gray-50 rounded p-3">{detailModal.order.notas}</p>
+                <div className="space-y-3">
+                  {parseOrderNotes(detailModal.order.notas).map((section, index) => (
+                    <div key={`${section.title}-${index}`} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{section.title}</p>
+                      {section.items.length > 0 ? (
+                        <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                          {section.items.map((item, itemIndex) => (
+                            <li key={`${item}-${itemIndex}`} className="flex gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-gray-400" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-sm text-gray-700 whitespace-pre-line">{section.title}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

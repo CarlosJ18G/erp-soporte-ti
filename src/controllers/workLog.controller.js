@@ -25,9 +25,10 @@ const getAll = async (req, res, next) => {
     const { ordenServicioId, tecnicoId, fecha } = req.query;
     const filters = { ordenServicioId, tecnicoId, fecha };
 
-    // Alcance por rol: ADMIN ve todo; TECNICO solo sus propios registros.
+    // Alcance por rol: ADMIN ve todo; TECNICO ve los registros de las órdenes asignadas a él.
     if (req.user?.rol !== 'ADMIN') {
-      filters.tecnicoId = req.user.id;
+      delete filters.tecnicoId;
+      filters.tecnicoOrdenId = req.user.id;
     }
 
     const logs = await WorkLogModel.findAll(filters);
@@ -45,7 +46,8 @@ const getById = async (req, res, next) => {
       return next(createHttpError(404, 'Registro de trabajo no encontrado.'));
     }
 
-    if (req.user?.rol !== 'ADMIN' && log.tecnicoId !== req.user.id) {
+    const tecnicoDeLaOrden = log.ordenServicio?.tecnicoId === req.user.id;
+    if (req.user?.rol !== 'ADMIN' && log.tecnicoId !== req.user.id && !tecnicoDeLaOrden) {
       return next(createHttpError(403, 'No tienes permisos para ver este registro.'));
     }
 
@@ -83,9 +85,9 @@ const create = async (req, res, next) => {
       return next(createHttpError(403, 'Solo el técnico asignado a la orden puede registrar horas.'));
     }
 
-    // El tecnicoId del log debe ser siempre el usuario autenticado
-    // (un admin puede registrar en nombre de cualquier técnico solo si lo especifica explícitamente)
-    const tecnicoId = body.tecnicoId ?? req.user.id;
+    // Por defecto el registro queda asociado al técnico de la orden.
+    // Un admin puede asignarlo explícitamente a otro técnico si lo necesita.
+    const tecnicoId = body.tecnicoId ?? orden.tecnico.id;
 
     // Prisma espera tipos consistentes para DateTime/Decimal.
     const payload = {

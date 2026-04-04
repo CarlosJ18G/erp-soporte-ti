@@ -9,7 +9,7 @@ const prisma = require('../config/database');
 
 const includeRelaciones = {
   ordenServicio: {
-    select: { id: true, numero: true, estado: true, tipo: true },
+    select: { id: true, numero: true, estado: true, tipo: true, tecnicoId: true },
   },
   tecnico: {
     select: { id: true, nombre: true, apellido: true, email: true, especialidad: true },
@@ -25,6 +25,7 @@ const WorkLogModel = {
     const where = { deletedAt: null };
     if (filters.ordenServicioId) where.ordenServicioId = filters.ordenServicioId;
     if (filters.tecnicoId)       where.tecnicoId       = filters.tecnicoId;
+    if (filters.tecnicoOrdenId)   where.ordenServicio  = { tecnicoId: filters.tecnicoOrdenId };
     if (filters.fecha) {
       // Filtrar por día exacto
       const dia       = new Date(filters.fecha);
